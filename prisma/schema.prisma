@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  User
+  Reseller
+  Admin
+}
+
+enum KeyStatus {
+  Available
+  Reserved
+  Used
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+}
+
+enum UnlinkStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String?
+  role         Role      @default(User)
+  telegramId   String?   @unique
+  statusBlocked Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  resellerBalance ResellerBalance?
+  subscriptions   Subscription[]
+  keysUsed        Key[]           @relation("KeyUsedBy")
+  invitesCreated  Invite[]        @relation("InvitesCreatedBy")
+  auditLogs       AuditLog[]      @relation("AuditActor")
+}
+
+model Invite {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  createdById Int?
+  usedById    Int?
+  usedAt      DateTime?
+  expiresAt   DateTime?
+  revoked     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  createdBy   User?     @relation("InvitesCreatedBy", fields: [createdById], references: [id])
+  usedBy      User?     @relation(fields: [usedById], references: [id])
+}
+
+model Product {
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  priceCents           Int
+  defaultDurationDays  Int       @default(30)
+  enabled              Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  keys         Key[]
+  subscriptions Subscription[]
+}
+
+model Key {
+  id              Int       @id @default(autoincrement())
+  token           String    @unique
+  productId       Int
+  ownerResellerId Int?
+  usedByUserId    Int?
+  usedAt          DateTime?
+  status          KeyStatus @default(Available)
+  createdAt       DateTime  @default(now())
+
+  product       Product @relation(fields: [productId], references: [id])
+  ownerReseller User?   @relation("KeyOwnerReseller", fields: [ownerResellerId], references: [id])
+  usedByUser    User?   @relation("KeyUsedBy", fields: [usedByUserId], references: [id])
+}
+
+model ResellerBalance {
+  id           Int   @id @default(autoincrement())
+  resellerId   Int   @unique
+  balanceCents Int   @default(0)
+
+  reseller User @relation(fields: [resellerId], references: [id])
+}
+
+model Transaction {
+  id           Int             @id @default(autoincrement())
+  resellerId   Int
+  amountCents  Int
+  type         TransactionType
+  productId    Int?
+  keyId        Int?
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+
+  reseller     User            @relation(fields: [resellerId], references: [id])
+}
+
+model Subscription {
+  id         Int                 @id @default(autoincrement())
+  userId     Int
+  productId  Int
+  expiresAt  DateTime
+  status     SubscriptionStatus  @default(ACTIVE)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  @@unique([userId, productId], name: "userId_productId")
+}
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  actorUserId  Int?
+  action       String
+  targetType   String?
+  targetId     Int?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  actorUser User?  @relation("AuditActor", fields: [actorUserId], references: [id])
+}
+
+model LoaderRelease {
+  id        Int      @id @default(autoincrement())
+  version   String   @unique
+  filePath  String
+  checksum  String?
+  createdAt DateTime @default(now())
+}
+
+model TelegramLink {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  userId    Int
+  createdAt DateTime @default(now())
+  usedAt    DateTime?
+  expiresAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model TelegramUnlinkRequest {
+  id         Int           @id @default(autoincrement())
+  userId     Int
+  status     UnlinkStatus  @default(PENDING)
+  reason     String?
+  createdAt  DateTime      @default(now())
+  resolvedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+}

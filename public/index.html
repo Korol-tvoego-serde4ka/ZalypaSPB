@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZalypaSPB - Панель управления</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-container">
+        <div class="login-box">
+            <h1>ZalypaSPB</h1>
+            <p>Панель управления</p>
+            
+            <div id="loginError" class="error-message hidden"></div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Имя пользователя</label>
+                    <input type="text" id="username" required autocomplete="username">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Пароль</label>
+                    <input type="password" id="password" required autocomplete="current-password">
+                </div>
+                
+                <button type="submit" class="btn">Войти</button>
+            </form>
+            
+        </div>
+    </div>
+
+    <!-- User Dashboard -->
+    <div id="userDashboard" class="dashboard">
+        <div class="container">
+            <div class="header">
+                <div class="header-left">
+                    <div class="logo">ZalypaSPB</div>
+                </div>
+                <div class="user-info">
+                    <span class="user-badge">User</span>
+                    <span id="userUsername"></span>
+                    <button class="btn-logout" onclick="logout()">Выход</button>
+                </div>
+            </div>
+
+            <div class="navigation">
+                <button class="nav-btn active" onclick="showSection(this, 'userLoader')">Loader</button>
+                <button class="nav-btn" onclick="showSection(this, 'userProducts')">Продукты</button>
+                <button class="nav-btn" onclick="showSection(this, 'userStatistics')">Статистика</button>
+                <button class="nav-btn" onclick="showSection(this, 'userTelegram')">Telegram</button>
+            </div>
+
+            <div id="userLoader" class="content-section active">
+                <div class="loader-widget">
+                    <div class="loader-spinner"></div>
+                    <div class="loader-text">Загрузка данных...</div>
+                </div>
+            </div>
+
+            <div id="userProducts" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Мои продукты</h2>
+                    </div>
+                    <div id="userProductsList" class="products-grid"></div>
+                </div>
+            </div>
+
+            <div id="userStatistics" class="content-section">
+                <div class="cards-grid">
+                    <div class="card">
+                        <div class="card-title">Активных продуктов</div>
+                        <div class="card-value">2</div>
+                        <div class="card-subtitle">Premium &amp; Basic</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Последний вход</div>
+                        <div class="card-value" style="font-size: 20px;">Сегодня</div>
+                        <div class="card-subtitle">20:00 +07</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Использование</div>
+                        <div class="card-value">85%</div>
+                        <div class="card-subtitle">Активность</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="userTelegram" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Telegram</h2>
+                    </div>
+                    <div id="userTelegramContainer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reseller Dashboard -->
+    <div id="resellerDashboard" class="dashboard">
+        <div class="container">
+            <div class="header">
+                <div class="header-left">
+                    <div class="logo">ZalypaSPB</div>
+                </div>
+                <div class="user-info">
+                    <span class="user-badge" style="background: rgba(255, 152, 0, 0.2); color: #FF9800;">Reseller</span>
+                    <span id="resellerUsername"></span>
+                    <button class="btn-logout" onclick="logout()">Выход</button>
+                </div>
+            </div>
+
+            <div class="navigation">
+                <button class="nav-btn active" onclick="showSection(this, 'resellerUsers')">Пользователи</button>
+                <button class="nav-btn" onclick="showSection(this, 'resellerProducts')">Продукты</button>
+                <button class="nav-btn" onclick="showSection(this, 'resellerStatistics')">Статистика</button>
+                <button class="nav-btn" onclick="showSection(this, 'resellerTelegram')">Telegram</button>
+            </div>
+
+            <div id="resellerUsers" class="content-section active">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Управление пользователями</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Имя пользователя</th>
+                                <th>Email</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resellerUsersTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="resellerProducts" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Управление продуктами</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Название</th>
+                                <th>Тип</th>
+                                <th>Цена</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resellerProductsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="resellerStatistics" class="content-section">
+                <div class="cards-grid">
+                    <div class="card">
+                        <div class="card-title">Всего пользователей</div>
+                        <div class="card-value" id="resellerUserCount">0</div>
+                        <div class="card-subtitle">Активных клиентов</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Всего продуктов</div>
+                        <div class="card-value" id="resellerProductCount">0</div>
+                        <div class="card-subtitle">Доступных ключей</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Доход</div>
+                        <div class="card-value" style="font-size: 24px;">₽45,000</div>
+                        <div class="card-subtitle">За месяц</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="resellerTelegram" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Telegram</h2>
+                    </div>
+                    <div id="resellerTelegramContainer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="adminDashboard" class="dashboard">
+        <div class="container">
+            <div class="header">
+                <div class="header-left">
+                    <div class="logo">ZalypaSPB</div>
+                </div>
+                <div class="user-info">
+                    <span class="user-badge" style="background: rgba(33, 150, 243, 0.2); color: #2196F3;">Admin</span>
+                    <span id="adminUsername"></span>
+                    <button class="btn-logout" onclick="logout()">Выход</button>
+                </div>
+            </div>
+
+            <div class="navigation">
+                <button class="nav-btn active" onclick="showSection(this, 'adminUsers')">Все пользователи</button>
+                <button class="nav-btn" onclick="showSection(this, 'adminResellers')">Реселлеры</button>
+                <button class="nav-btn" onclick="showSection(this, 'adminLogs')">Логи аудита</button>
+                <button class="nav-btn" onclick="showSection(this, 'adminSettings')">Настройки</button>
+                <button class="nav-btn" onclick="showSection(this, 'adminTelegram')">Telegram</button>
+            </div>
+
+            <div id="adminUsers" class="content-section active">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Все пользователи системы</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Имя пользователя</th>
+                                <th>Роль</th>
+                                <th>Email</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="adminResellers" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Все реселлеры</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Имя</th>
+                                <th>Пользователей</th>
+                                <th>Продуктов</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminResellersTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="adminLogs" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Журнал аудита</h2>
+                    </div>
+                    <div id="adminLogsContainer"></div>
+                </div>
+            </div>
+
+            <div id="adminSettings" class="content-section">
+                <div class="settings-section">
+                    <div class="settings-title">Настройки системы</div>
+                    <div class="setting-item">
+                        <span class="setting-label">Версия системы</span>
+                        <span class="setting-value">v1.0.0</span>
+                    </div>
+                    <div class="setting-item">
+                        <span class="setting-label">Защита HTTPS</span>
+                        <span class="setting-value">Включена</span>
+                    </div>
+                    <div class="setting-item">
+                        <span class="setting-label">XSS фильтрация</span>
+                        <span class="setting-value">Активна</span>
+                    </div>
+                    <div class="setting-item">
+                        <span class="setting-label">Хэширование паролей</span>
+                        <span class="setting-value">bcrypt</span>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <div class="settings-title">Статистика системы</div>
+                    <div class="cards-grid">
+                        <div class="card">
+                            <div class="card-title">Всего пользователей</div>
+                            <div class="card-value" id="adminTotalUsers">0</div>
+                            <div class="card-subtitle">В системе</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">Реселлеров</div>
+                            <div class="card-value" id="adminTotalResellers">0</div>
+                            <div class="card-subtitle">Активных</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">Записей в логах</div>
+                            <div class="card-value" id="adminTotalLogs">0</div>
+                            <div class="card-subtitle">За всё время</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="adminTelegram" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Telegram — рассылки и заявки на отвязку</h2>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-title">Рассылка</div>
+                        <div class="form-group">
+                            <label>Текст сообщения</label>
+                            <textarea id="adminBroadcastText" rows="3" style="width:100%;"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Аудитория</label>
+                            <select id="adminBroadcastAudience">
+                                <option value="all">Все</option>
+                                <option value="User">User</option>
+                                <option value="Reseller">Reseller</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label><input type="checkbox" id="adminBroadcastIncludeGroup"> Также отправить в группу</label>
+                        </div>
+                        <button class="btn" onclick="sendAdminBroadcast()">Отправить</button>
+                        <div id="adminBroadcastResult" style="margin-top:8px;"></div>
+                    </div>
+                    <div class="table-header" style="margin-top:24px;">
+                        <h2 class="table-title">Заявки на отвязку</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Пользователь</th>
+                                <th>Статус</th>
+                                <th>Причина</th>
+                                <th>Создана</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUnlinkRequestsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="/assets/js/api-bridge.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,453 @@
+// Progressive API bridge over the demo UI. Falls back to demo data only if API is unavailable.
+(function(){
+  // Globals and helpers (no demo data)
+  if (typeof window.currentUser === 'undefined') {
+    window.currentUser = null;
+  }
+
+  function sanitizeInput(i){
+    const d=document.createElement('div');
+    d.textContent=String(i ?? '');
+    return d.innerHTML;
+  }
+
+  function showNotification(message,type='success'){
+    const n=document.createElement('div');
+    n.className=`notification ${type}`;
+    n.textContent=message;
+    document.body.appendChild(n);
+    setTimeout(()=>{n.remove()},3000);
+  }
+
+  function showDashboard(role){
+    document.getElementById('userDashboard').classList.remove('active');
+    document.getElementById('resellerDashboard').classList.remove('active');
+    document.getElementById('adminDashboard').classList.remove('active');
+    if(role==='User'){
+      document.getElementById('userDashboard').classList.add('active');
+      const el = document.getElementById('userUsername'); if (el && currentUser) el.textContent=currentUser.username;
+      loadUserProducts();
+      loadLoaderRelease();
+    } else if (role==='Reseller'){
+      document.getElementById('resellerDashboard').classList.add('active');
+      const el = document.getElementById('resellerUsername'); if (el && currentUser) el.textContent=currentUser.username;
+      loadResellerUsers();
+      loadResellerProducts();
+      updateResellerStats();
+    } else if (role==='Admin'){
+      document.getElementById('adminDashboard').classList.add('active');
+      const el = document.getElementById('adminUsername'); if (el && currentUser) el.textContent=currentUser.username;
+      loadAdminUsers();
+      loadAdminResellers();
+      loadAdminLogs();
+      updateAdminStats();
+    }
+  }
+
+  function showSection(btn,sectionId){
+    const dash=document.querySelector('.dashboard.active');
+    if(dash){
+      dash.querySelectorAll('.content-section').forEach(s=>s.classList.remove('active'));
+      dash.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+    }
+    document.getElementById(sectionId).classList.add('active');
+    if(btn) btn.classList.add('active');
+    // Lazy load per section
+    try {
+      if (sectionId === 'userTelegram') loadUserTelegram();
+      if (sectionId === 'resellerTelegram') loadResellerTelegram();
+      if (sectionId === 'adminTelegram') loadAdminUnlinkRequests();
+    } catch(_){}
+  }
+
+  window.openModal = function(id){ const el = document.getElementById(id); if (el) el.classList.add('active'); };
+  window.closeModal = function(id){ const el = document.getElementById(id); if (el) el.classList.remove('active'); };
+
+  async function api(path, opts={}){
+    const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (!res.ok) {
+      let err = null;
+      try { err = await res.json(); } catch(_) {}
+      const e = new Error('API error');
+      e.status = res.status;
+      e.payload = err;
+      throw e;
+    }
+    return res.json();
+  }
+
+  function setLoginError(msg){
+    const el = document.getElementById('loginError');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  // Try restore session on load
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const resp = await api('/api/auth/me');
+      if (resp && resp.user) {
+        currentUser = { username: resp.user.username, role: resp.user.role, passwordHash: 'api' };
+        document.getElementById('loginPage').style.display = 'none';
+        showDashboard(resp.user.role);
+        if (resp.user.role === 'User') { try { await loadLoaderRelease(); } catch(_) {} }
+      }
+    } catch(_) { /* ignore if not logged in */ }
+  });
+
+  // Intercept login form submit in capture phase to override demo login handler
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('loginForm');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const username = sanitizeInput(document.getElementById('username').value.trim());
+      const password = document.getElementById('password').value;
+      try {
+        const resp = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+        currentUser = { username: resp.user.username, role: resp.user.role, passwordHash: 'api' };
+        document.getElementById('loginPage').style.display = 'none';
+        showDashboard(resp.user.role);
+        if (resp.user.role === 'User') { try { await loadLoaderRelease(); } catch(_) {} }
+        showNotification('Успешный вход в систему!', 'success');
+      } catch (err) {
+        setLoginError('Неверное имя пользователя или пароль');
+      }
+    }, { capture: true });
+  });
+
+  // Loader release renderer
+  window.loadLoaderRelease = async function(){
+    const section = document.getElementById('userLoader');
+    if (!section) return;
+    try {
+      const { version, url } = await api('/api/loader/latest');
+      section.innerHTML = `
+        <div class="loader-widget">
+          <div class="loader-text">Последняя версия лоадера: v${sanitizeInput(version || '—')}</div>
+          <div style="margin-top: 16px;">
+            <a class="btn" href="${sanitizeInput(url)}">Скачать</a>
+          </div>
+        </div>
+      `;
+    } catch(_) {}
+  };
+
+  // Admin: Telegram broadcast
+  window.sendAdminBroadcast = async function(){
+    const textEl = document.getElementById('adminBroadcastText');
+    const audEl = document.getElementById('adminBroadcastAudience');
+    const grpEl = document.getElementById('adminBroadcastIncludeGroup');
+    const resultEl = document.getElementById('adminBroadcastResult');
+    if (!textEl || !audEl || !grpEl || !resultEl) return;
+    const text = String(textEl.value || '').trim();
+    if (!text) { showNotification('Введите текст сообщения', 'error'); return; }
+    const audience = audEl.value;
+    const include_group = !!grpEl.checked;
+    const payload = { text, include_group };
+    if (audience && audience !== 'all') payload.roles = [audience];
+    resultEl.textContent = 'Отправка...';
+    try {
+      const resp = await api('/api/telegram/broadcast', { method: 'POST', body: JSON.stringify(payload) });
+      resultEl.textContent = `Отправлено: ${resp.sent}, не удалось: ${resp.failed}, получателей: ${resp.recipients}`;
+      showNotification('Рассылка завершена', 'success');
+    } catch (e) {
+      resultEl.textContent = 'Ошибка при отправке';
+      showNotification('Ошибка при отправке', 'error');
+    }
+  };
+
+  // Admin: load unlink requests
+  window.loadAdminUnlinkRequests = async function(){
+    const tbody = document.getElementById('adminUnlinkRequestsTable');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    try {
+      const resp = await api('/api/telegram/unlink/requests');
+      (resp.items || []).forEach(item => {
+        const tr = document.createElement('tr');
+        const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('ru-RU') : '';
+        tr.innerHTML = `
+          <td>${item.id}</td>
+          <td>${sanitizeInput(item.user.username)}</td>
+          <td>${sanitizeInput(item.status)}</td>
+          <td>${sanitizeInput(item.reason || '')}</td>
+          <td>${sanitizeInput(dateStr)}</td>
+          <td>
+            <button class="btn-action" data-act="approve" data-id="${item.id}" ${item.status !== 'PENDING' ? 'disabled' : ''}>Одобрить</button>
+            <button class="btn-action" data-act="reject" data-id="${item.id}" ${item.status !== 'PENDING' ? 'disabled' : ''}>Отклонить</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-act]')?.forEach(btn => {
+        btn.addEventListener('click', async (e)=>{
+          const id = Number(e.currentTarget.getAttribute('data-id'));
+          const act = e.currentTarget.getAttribute('data-act');
+          try {
+            if (act === 'approve') {
+              await api(`/api/telegram/unlink/requests/${id}/approve`, { method: 'POST' });
+              showNotification('Заявка одобрена', 'success');
+            } else {
+              const reason = prompt('Укажите причину отказа (опционально)') || '';
+              await api(`/api/telegram/unlink/requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
+              showNotification('Заявка отклонена', 'info');
+            }
+            await loadAdminUnlinkRequests();
+          } catch(_) { showNotification('Ошибка обработки заявки', 'error'); }
+        });
+      });
+    } catch(_) {}
+  };
+
+  // Telegram panels
+  async function renderLinkInfo(container, status){
+    container.innerHTML = '';
+    const wrap = document.createElement('div');
+    if (status.linked) {
+      wrap.innerHTML = `
+        <div class="card">
+          <div class="card-title">Статус</div>
+          <div class="card-value">Привязан</div>
+          <div class="card-subtitle">Telegram ID: ${sanitizeInput(status.telegramId || '')}</div>
+        </div>
+        <div style="margin-top:16px;">
+          <button class="btn" id="btnUnlink">Отвязать Telegram</button>
+        </div>
+      `;
+      container.appendChild(wrap);
+      const btn = wrap.querySelector('#btnUnlink');
+      if (btn) btn.addEventListener('click', async ()=>{
+        const reason = prompt('Укажите причину отвязки (опционально)') || '';
+        try { await api('/api/telegram/link/unlink', { method: 'POST', body: JSON.stringify({ reason }) }); showNotification('Заявка на отвязку отправлена', 'success'); } catch(_) { showNotification('Ошибка', 'error'); }
+        await loadUserTelegram().catch(()=>{});
+        await loadResellerTelegram().catch(()=>{});
+      });
+    } else {
+      wrap.innerHTML = `
+        <div class="card">
+          <div class="card-title">Статус</div>
+          <div class="card-value">Не привязан</div>
+          <div class="card-subtitle">Нажмите, чтобы получить ссылку для привязки</div>
+        </div>
+        <div style="margin-top:16px;">
+          <button class="btn" id="btnStartLink">Привязать Telegram</button>
+        </div>
+        <div id="linkResult" style="margin-top:12px;"></div>
+      `;
+      container.appendChild(wrap);
+      const btn = wrap.querySelector('#btnStartLink');
+      if (btn) btn.addEventListener('click', async ()=>{
+        const resCont = wrap.querySelector('#linkResult');
+        try {
+          const data = await api('/api/telegram/link/start', { method: 'POST' });
+          const link = sanitizeInput(data.link);
+          const code = sanitizeInput(data.code);
+          resCont.innerHTML = `
+            <div>Ссылка для привязки:</div>
+            <div style="margin-top:6px;"><a class="btn" href="${link}" target="_blank" rel="noopener">Открыть бота</a></div>
+            <div style="margin-top:8px;">Код: <code>${code}</code> <button class="btn" id="btnCopyCode">Копировать</button></div>
+          `;
+          const copyBtn = wrap.querySelector('#btnCopyCode');
+          if (copyBtn) copyBtn.addEventListener('click', async ()=>{
+            try { await navigator.clipboard.writeText(data.code); showNotification('Скопировано', 'success'); } catch(_) {}
+          });
+        } catch(_) {
+          resCont.textContent = 'Ошибка. Попробуйте позже.';
+        }
+      });
+    }
+  }
+
+  window.loadUserTelegram = async function(){
+    const container = document.getElementById('userTelegramContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="loader-text">Загрузка...</div>';
+    try {
+      const status = await api('/api/telegram/link/status');
+      await renderLinkInfo(container, status);
+    } catch(_) { container.innerHTML = '<div class="error-message">Ошибка загрузки</div>'; }
+  };
+
+  window.loadResellerTelegram = async function(){
+    const container = document.getElementById('resellerTelegramContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="loader-text">Загрузка...</div>';
+    try {
+      const status = await api('/api/telegram/link/status');
+      await renderLinkInfo(container, status);
+    } catch(_) { container.innerHTML = '<div class="error-message">Ошибка загрузки</div>'; }
+  };
+
+  // Override logout to call API
+  window.logout = async function(){
+    try { await api('/api/auth/logout', { method: 'POST' }); } catch(_) {}
+    currentUser = null;
+    document.getElementById('userDashboard').classList.remove('active');
+    document.getElementById('resellerDashboard').classList.remove('active');
+    document.getElementById('adminDashboard').classList.remove('active');
+    document.getElementById('loginPage').style.display = 'flex';
+    document.getElementById('loginForm').reset();
+    document.getElementById('loginError').classList.add('hidden');
+    showNotification('Вы вышли из системы', 'info');
+  };
+
+  // API-backed data loaders overriding demo ones
+  window.loadUserProducts = async function(){
+    const container = document.getElementById('userProductsList');
+    if (!container) return;
+    container.innerHTML = '';
+    try {
+      const resp = await api('/api/products');
+      (resp.items || []).forEach(product => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        const cents = (product.price_cents ?? product.priceCents) || 0;
+        const price = (cents/100).toLocaleString('ru-RU');
+        card.innerHTML = `
+          <div class="product-name">${sanitizeInput(product.name)}</div>
+          <div class="product-info">Тип: ${sanitizeInput(product.type || '')}</div>
+          <div class="product-info">Цена: ₽${price}</div>
+        `;
+        container.appendChild(card);
+      });
+    } catch(_) {
+      // silent fallback: keep empty or demo
+    }
+  };
+
+  window.loadResellerUsers = async function(){
+    const tbody = document.getElementById('resellerUsersTable');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    try {
+      const resp = await api('/api/reseller/users');
+      (resp.items || []).forEach(user => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${user.id}</td>
+          <td>${sanitizeInput(user.username)}</td>
+          <td>${sanitizeInput(user.email)}</td>
+          <td>${sanitizeInput(user.status)}</td>
+          <td>
+            <button class="btn-action btn-edit" onclick="showNotification('Редактирование позже', 'info')">Редактировать</button>
+            <button class="btn-action btn-delete" onclick="showNotification('Удаление позже', 'info')">Удалить</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch(_) {}
+  };
+
+  window.loadResellerProducts = async function(){
+    const tbody = document.getElementById('resellerProductsTable');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    try {
+      const resp = await api('/api/reseller/products');
+      (resp.items || []).forEach(product => {
+        const tr = document.createElement('tr');
+        const cents = (product.price_cents ?? product.priceCents) || 0;
+        const price = (cents/100).toLocaleString('ru-RU');
+        tr.innerHTML = `
+          <td>${product.id}</td>
+          <td>${sanitizeInput(product.name)}</td>
+          <td>${sanitizeInput(product.type || '')}</td>
+          <td>₽${price}</td>
+          <td>
+            <button class="btn-action btn-edit" onclick="showNotification('Редактирование позже', 'info')">Редактировать</button>
+            <button class="btn-action btn-delete" onclick="showNotification('Удаление позже', 'info')">Удалить</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch(_) {}
+  };
+
+  window.updateResellerStats = async function(){
+    try {
+      const [uResp, pResp] = await Promise.all([
+        api('/api/reseller/users'), api('/api/reseller/products')
+      ]);
+      document.getElementById('resellerUserCount').textContent = (uResp.items || []).length;
+      document.getElementById('resellerProductCount').textContent = (pResp.items || []).length;
+    } catch(_){}
+  };
+
+  window.loadAdminUsers = async function(){
+    const tbody = document.getElementById('adminUsersTable');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    try {
+      const resp = await api('/api/admin/users');
+      (resp.items || []).forEach(user => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${user.id}</td>
+          <td>${sanitizeInput(user.username)}</td>
+          <td>${sanitizeInput(user.role)}</td>
+          <td>${sanitizeInput(user.email)}</td>
+          <td><span style="color: ${user.status === 'Активен' ? '#4CAF50' : '#f44336'}">${sanitizeInput(user.status)}</span></td>
+          <td>
+            <button class="btn-action btn-edit" onclick="showNotification('Редактирование позже', 'info')">Просмотр</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch(_){}
+  };
+
+  window.loadAdminResellers = async function(){
+    // Build from admin users list
+    try{
+      const resp = await api('/api/admin/users');
+      const resellers = (resp.items || []).filter(u => u.role === 'Reseller');
+      const tbody = document.getElementById('adminResellersTable');
+      if (!tbody) return;
+      tbody.innerHTML='';
+      // counts approximated from reseller endpoints
+      let userCount = 0, productCount = 0;
+      try {
+        const [uResp, pResp] = await Promise.all([
+          api('/api/reseller/users'), api('/api/reseller/products')
+        ]);
+        userCount = (uResp.items || []).length;
+        productCount = (pResp.items || []).length;
+      } catch(_){}
+      resellers.forEach(reseller => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${reseller.id}</td>
+          <td>${sanitizeInput(reseller.username)}</td>
+          <td>${userCount}</td>
+          <td>${productCount}</td>
+          <td><span style="color: #4CAF50">${sanitizeInput(reseller.status || 'Активен')}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch(_){}
+  };
+
+  window.loadAdminLogs = async function(){
+    const container = document.getElementById('adminLogsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    try {
+      const resp = await api('/api/admin/logs');
+      (resp.items || []).forEach(log => {
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.innerHTML = `
+          <div class="log-header">
+            <span class="log-user">${sanitizeInput(log.who)}</span>
+            <span class="log-time">${sanitizeInput(log.when)}</span>
+          </div>
+          <div class="log-action">${sanitizeInput(log.what)}</div>
+        `;
+        container.appendChild(logEntry);
+      });
+    } catch(_) {}
+  };
+})();
