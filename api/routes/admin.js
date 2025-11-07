@@ -6,6 +6,11 @@ const crypto = require('crypto');
 const { logAudit } = require('../utils/audit');
 const bcrypt = require('bcryptjs');
 const { banInGroup, unbanInGroup } = require('../services/telegram');
+const { body } = require('express-validator');
+const { validate } = require('../middleware/validate');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 
 router.use(requireAuth, requireRoles('Admin'));
 
@@ -23,6 +28,60 @@ router.get('/logs', async (_req, res) => {
   try {
     const logs = await prisma.auditLog.findMany({ include: { actorUser: true }, orderBy: { createdAt: 'desc' }, take: 100 });
     const items = logs.map(l => ({ who: l.actorUser ? l.actorUser.username : 'system', what: l.action, when: l.createdAt.toISOString() }));
+    return res.json({ items });
+  } catch (e) {
+    return res.json({ items: [] });
+  }
+});
+
+// Loader releases upload/list (Admin)
+const uploadsDir = path.join(__dirname, '../../downloads');
+try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const ts = Date.now();
+    const safe = String(file.originalname || 'file').replace(/[^a-zA-Z0-9_.-]/g, '_');
+    cb(null, `${ts}_${safe}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 200 * 1024 * 1024 } });
+
+router.post('/loader/release', upload.single('file'), async (req, res) => {
+  const version = String((req.body && req.body.version) || '').trim();
+  const checksum = req.body && req.body.checksum ? String(req.body.checksum).trim() : null;
+  if (!version || !req.file) return res.status(400).json({ error: 'invalid_payload' });
+  try {
+    if (!process.env.DATABASE_URL) return res.status(501).json({ error: 'not_supported' });
+    const relPath = `/downloads/${req.file.filename}`;
+    let hash = checksum;
+    if (!hash) {
+      const crypto = require('crypto');
+      const data = fs.readFileSync(req.file.path);
+      hash = crypto.createHash('sha256').update(data).digest('hex');
+    }
+    const r = await prisma.loaderRelease.create({ data: { version, filePath: relPath, checksum: hash } });
+    await logAudit(req.user.sub, `Uploaded loader ${version}`, 'LoaderRelease', r.id, { file: relPath });
+    return res.json({ item: { id: r.id, version: r.version, filePath: r.filePath, checksum: r.checksum } });
+  } catch (e) {
+    return res.status(500).json({ error: 'upload_error' });
+  }
+});
+
+router.get('/loader/releases', async (_req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json({ items: [] });
+    const items = await prisma.loaderRelease.findMany({ orderBy: { createdAt: 'desc' }, take: 50 });
+    return res.json({ items });
+  } catch (e) {
+    return res.json({ items: [] });
+  }
+});
+
+// List all products for admin
+router.get('/products', async (_req, res) => {
+  try {
+    const items = await prisma.product.findMany({ orderBy: { id: 'asc' } });
     return res.json({ items });
   } catch (e) {
     return res.json({ items: [] });
@@ -165,6 +224,36 @@ router.delete('/products/:id', async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ error: 'delete_error' });
+  }
+});
+
+// List resellers with balances
+router.get('/resellers', async (_req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json({ items: [] });
+    const users = await prisma.user.findMany({ where: { role: 'Reseller' }, orderBy: { id: 'asc' } });
+    const ids = users.map(u => u.id);
+    const balances = await prisma.resellerBalance.findMany({ where: { resellerId: { in: ids } } });
+    const map = new Map(balances.map(b => [b.resellerId, b.balanceCents]));
+    const items = users.map(u => ({ id: u.id, username: u.username, email: u.email || null, status: u.statusBlocked ? 'Заблокирован' : 'Активен', balanceCents: map.get(u.id) || 0 }));
+    return res.json({ items });
+  } catch (e) {
+    return res.json({ items: [] });
+  }
+});
+
+// Set reseller balance (absolute value in cents)
+router.post('/resellers/:id/balance', [ body('balanceCents').isInt({ min: 0 }), validate ], async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid_id' });
+  try {
+    if (!process.env.DATABASE_URL) return res.status(501).json({ error: 'not_supported' });
+    const bal = Math.max(0, parseInt(req.body.balanceCents, 10));
+    await prisma.resellerBalance.upsert({ where: { resellerId: id }, update: { balanceCents: bal }, create: { resellerId: id, balanceCents: bal } });
+    await logAudit(req.user.sub, `Set reseller ${id} balance to ${bal}`, 'ResellerBalance', id, { balanceCents: bal });
+    return res.json({ ok: true, balance_cents: bal });
+  } catch (e) {
+    return res.status(500).json({ error: 'balance_error' });
   }
 });
 

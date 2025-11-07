@@ -67,7 +67,9 @@
       if (sectionId === 'adminSettings') updateAdminStats();
       if (sectionId === 'adminTelegram') { try { loadAdminTelegramSelf(); } catch(_){} try { loadAdminUnlinkRequests(); } catch(_){} }
       if (sectionId === 'adminInvites') loadAdminInvites();
-    } catch(_){}
+      if (sectionId === 'adminLoader') loadAdminLoaderReleases();
+      if (sectionId === 'adminProducts') loadAdminProducts();
+    } catch(_) {}
   }
 
   window.openModal = function(id){ const el = document.getElementById(id); if (el) el.classList.add('active'); };
@@ -111,6 +113,132 @@
     if (re) re.classList.add('hidden');
   };
 
+  // Admin: Loader releases list loader
+  window.loadAdminLoaderReleases = async function(){
+    const tbody = document.getElementById('adminLoaderReleasesTable');
+    if (!tbody) return;
+    tbody.innerHTML='';
+    try {
+      const resp = await api('/api/admin/loader/releases');
+      (resp.items || []).forEach(rel => {
+        const tr = document.createElement('tr');
+        const created = rel.createdAt ? new Date(rel.createdAt).toLocaleString('ru-RU') : '';
+        const fileUrl = rel.filePath || '';
+        tr.innerHTML = `
+          <td>${rel.id}</td>
+          <td>${sanitizeInput(rel.version)}</td>
+          <td><a href="${sanitizeInput(fileUrl)}" target="_blank" rel="noopener">${sanitizeInput(fileUrl.split('/').pop() || fileUrl)}</a></td>
+          <td><code>${sanitizeInput((rel.checksum || '').slice(0, 16))}...</code></td>
+          <td>${sanitizeInput(created)}</td>
+          <td>
+            <button class="btn-action" data-act="ldr-copy" data-url="${fileUrl}">Скопировать ссылку</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-act="ldr-copy"]').forEach(btn => {
+        btn.addEventListener('click', async (e)=>{
+          const url = e.currentTarget.getAttribute('data-url');
+          try { await navigator.clipboard.writeText(location.origin + url); showNotification('Ссылка скопирована', 'success'); } catch(_){ showNotification('Не удалось скопировать', 'error'); }
+        });
+      });
+    } catch(_){ }
+  };
+
+  // Admin: Products list loader
+  window.loadAdminProducts = async function(){
+    const tbody = document.getElementById('adminProductsTable');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    try {
+      const resp = await api('/api/admin/products');
+      (resp.items || []).forEach(p => {
+        const tr = document.createElement('tr');
+        const price = ((p.priceCents || 0)/100).toLocaleString('ru-RU');
+        tr.innerHTML = `
+          <td>${p.id}</td>
+          <td>${sanitizeInput(p.name)}</td>
+          <td>₽${price}</td>
+          <td>${p.defaultDurationDays || 0}</td>
+          <td>${p.enabled ? 'Вкл' : 'Выкл'}</td>
+          <td>
+            <button class="btn-action" data-act="prod-edit" data-id="${p.id}">Изменить</button>
+            <button class="btn-action" data-act="prod-toggle" data-id="${p.id}" data-enabled="${p.enabled ? '1':'0'}">${p.enabled ? 'Выключить' : 'Включить'}</button>
+            <button class="btn-action btn-delete" data-act="prod-del" data-id="${p.id}">Удалить</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+  // Admin: upload loader form (multipart)
+  document.addEventListener('DOMContentLoaded', () => {
+    const f = document.getElementById('adminUploadLoaderForm');
+    if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('adminLoaderMsg');
+      if (msg) { msg.classList.add('hidden'); msg.textContent=''; }
+      const fileEl = document.getElementById('ldrFile');
+      const verEl = document.getElementById('ldrVersion');
+      const sumEl = document.getElementById('ldrChecksum');
+      if (!fileEl?.files?.[0] || !verEl?.value) { if (msg) { msg.textContent='Заполните версию и файл'; msg.classList.remove('hidden'); } return; }
+      const fd = new FormData();
+      fd.append('file', fileEl.files[0]);
+      fd.append('version', verEl.value.trim());
+      if (sumEl?.value) fd.append('checksum', sumEl.value.trim());
+      try {
+        const res = await fetch('/api/admin/loader/release', { method: 'POST', body: fd });
+        if (!res.ok) throw new Error('upload_fail');
+        await res.json();
+        showNotification('Релиз загружен', 'success');
+        try { await loadAdminLoaderReleases(); } catch(_){}
+        verEl.value = '';
+        fileEl.value = '';
+        if (sumEl) sumEl.value = '';
+      } catch(_) {
+        if (msg) { msg.textContent='Ошибка загрузки'; msg.classList.remove('hidden'); }
+        showNotification('Ошибка загрузки', 'error');
+      }
+    }, { capture: true });
+  });
+      tbody.querySelectorAll('button[data-act]').forEach(btn => {
+        btn.addEventListener('click', async (e)=>{
+          const id = Number(e.currentTarget.getAttribute('data-id'));
+          const act = e.currentTarget.getAttribute('data-act');
+          try {
+            if (act === 'prod-edit') {
+              const tr = e.currentTarget.closest('tr');
+              const curName = tr.children[1].textContent.trim();
+              const curPrice = tr.children[2].textContent.replace(/[₽\s]/g,'').replace(',', '.');
+              const curDays = tr.children[3].textContent.trim();
+              const name = prompt('Название:', curName);
+              if (name == null) return;
+              const priceRubStr = prompt('Цена (₽):', curPrice || '0');
+              if (priceRubStr == null) return;
+              const priceRub = Number(priceRubStr.replace(',', '.'));
+              if (Number.isNaN(priceRub) || priceRub < 0) { showNotification('Некорректная цена', 'error'); return; }
+              const daysStr = prompt('Срок по умолчанию (дней):', curDays || '30');
+              if (daysStr == null) return;
+              const days = Number(daysStr);
+              if (!Number.isInteger(days) || days < 1) { showNotification('Некорректный срок', 'error'); return; }
+              await api(`/api/admin/products/${id}`, { method: 'PATCH', body: JSON.stringify({ name, priceCents: Math.round(priceRub*100), defaultDurationDays: days }) });
+              showNotification('Продукт обновлён', 'success');
+            } else if (act === 'prod-toggle') {
+              const enabled = e.currentTarget.getAttribute('data-enabled') === '1';
+              await api(`/api/admin/products/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !enabled }) });
+              showNotification('Статус изменён', 'success');
+            } else if (act === 'prod-del') {
+              if (!confirm('Удалить продукт?')) return;
+              await api(`/api/admin/products/${id}`, { method: 'DELETE' });
+              showNotification('Продукт удалён', 'success');
+            }
+            await loadAdminProducts();
+          } catch(_) { showNotification('Ошибка операции', 'error'); }
+        });
+      });
+    } catch(_){ }
+  };
+
   // Admin: self Telegram panel
   window.loadAdminTelegramSelf = async function(){
     const container = document.getElementById('adminTelegramSelfContainer');
@@ -144,6 +272,35 @@
         if (resp.user.role === 'User') { try { await loadLoaderRelease(); } catch(_) {} }
       }
     } catch(_) { /* ignore if not logged in */ }
+  });
+
+  // Admin: create product form
+  document.addEventListener('DOMContentLoaded', () => {
+    const f = document.getElementById('adminCreateProductForm');
+    if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('adminProductsMsg');
+      if (msg) { msg.classList.add('hidden'); msg.textContent=''; }
+      const name = (document.getElementById('apName')?.value || '').trim();
+      const priceRub = Number(document.getElementById('apPrice')?.value || 0);
+      const days = Number(document.getElementById('apDays')?.value || 30);
+      const enabled = !!document.getElementById('apEnabled')?.checked;
+      if (!name || Number.isNaN(priceRub) || priceRub < 0) { if (msg) { msg.textContent='Проверьте поля'; msg.classList.remove('hidden'); } return; }
+      try {
+        const payload = { name, priceCents: Math.round(priceRub * 100), defaultDurationDays: Math.max(1, days), enabled };
+        await api('/api/admin/products', { method: 'POST', body: JSON.stringify(payload) });
+        showNotification('Продукт создан', 'success');
+        try { await loadAdminProducts(); } catch(_){}
+        (document.getElementById('apName')||{}).value='';
+        (document.getElementById('apPrice')||{}).value='';
+        (document.getElementById('apDays')||{}).value='30';
+        if (document.getElementById('apEnabled')) document.getElementById('apEnabled').checked = true;
+      } catch (_) {
+        if (msg) { msg.textContent='Ошибка создания продукта'; msg.classList.remove('hidden'); }
+        showNotification('Ошибка создания продукта', 'error');
+      }
+    }, { capture: true });
   });
 
   // Intercept login form submit in capture phase to override demo login handler
@@ -235,6 +392,12 @@
     if (navBtn && navBtn.dataset.section) {
       e.preventDefault();
       showSection(navBtn, navBtn.dataset.section);
+      return;
+    }
+    const genericSectionBtn = e.target.closest('[data-section]');
+    if (genericSectionBtn && genericSectionBtn.dataset.section) {
+      e.preventDefault();
+      showSection(null, genericSectionBtn.dataset.section);
       return;
     }
     const logoutBtn = e.target.closest('.btn-logout');
@@ -719,34 +882,40 @@
   };
 
   window.loadAdminResellers = async function(){
-    // Build from admin users list
     try{
-      const resp = await api('/api/admin/users');
-      const resellers = (resp.items || []).filter(u => u.role === 'Reseller');
+      const resp = await api('/api/admin/resellers');
+      const items = resp.items || [];
       const tbody = document.getElementById('adminResellersTable');
       if (!tbody) return;
       tbody.innerHTML='';
-      // counts approximated from reseller endpoints
-      let userCount = 0, productCount = 0;
-      try {
-        const [uResp, pResp] = await Promise.all([
-          api('/api/reseller/users'), api('/api/reseller/products')
-        ]);
-        userCount = (uResp.items || []).length;
-        productCount = (pResp.items || []).length;
-      } catch(_){}
-      resellers.forEach(reseller => {
+      items.forEach(r => {
         const tr = document.createElement('tr');
+        const balRub = ((r.balanceCents || 0)/100).toLocaleString('ru-RU');
+        const statusColor = r.status === 'Активен' ? '#4CAF50' : '#f44336';
         tr.innerHTML = `
-          <td>${reseller.id}</td>
-          <td>${sanitizeInput(reseller.username)}</td>
-          <td>${userCount}</td>
-          <td>${productCount}</td>
-          <td><span style="color: #4CAF50">${sanitizeInput(reseller.status || 'Активен')}</span></td>
+          <td>${r.id}</td>
+          <td>${sanitizeInput(r.username)}</td>
+          <td>${sanitizeInput(r.email || '')}</td>
+          <td><span style="color:${statusColor}">${sanitizeInput(r.status)}</span></td>
+          <td>₽${balRub}</td>
+          <td>
+            <button class="btn-action" data-act="res-bal" data-id="${r.id}">Изменить баланс</button>
+          </td>
         `;
         tbody.appendChild(tr);
       });
-    } catch(_){}
+      tbody.querySelectorAll('button[data-act="res-bal"]').forEach(btn => {
+        btn.addEventListener('click', async (e)=>{
+          const id = Number(e.currentTarget.getAttribute('data-id'));
+          const curText = e.currentTarget.closest('tr').children[4].textContent.replace(/[₽\s]/g,'').replace(',', '.');
+          const val = prompt('Новый баланс (₽):', curText || '0');
+          if (val == null) return;
+          const rub = Number(val.replace(',', '.'));
+          if (Number.isNaN(rub) || rub < 0) { showNotification('Некорректная сумма', 'error'); return; }
+          try { await api(`/api/admin/resellers/${id}/balance`, { method: 'POST', body: JSON.stringify({ balanceCents: Math.round(rub*100) }) }); showNotification('Баланс обновлён', 'success'); await loadAdminResellers(); } catch(_){ showNotification('Ошибка обновления', 'error'); }
+        });
+      });
+    } catch(_){ }
   };
 
   window.loadAdminLogs = async function(){

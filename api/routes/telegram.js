@@ -6,6 +6,16 @@ const { sendMessage, getBotUsername, inlineKeyboardWithWebApp } = require('../se
 const { body } = require('express-validator');
 const { validate } = require('../middleware/validate');
 
+function parseTgCommand(text) {
+  const t = String(text || '').trim();
+  if (!t.startsWith('/')) return { cmd: null, args: [] };
+  const parts = t.split(/\s+/);
+  const first = parts[0];
+  const cmd = first.slice(1).split('@')[0].toLowerCase();
+  const args = parts.slice(1);
+  return { cmd, args };
+}
+
 // Telegram webhook endpoint (set via BotFather or setWebhook)
 router.post('/webhook', async (req, res) => {
   try {
@@ -15,11 +25,11 @@ router.post('/webhook', async (req, res) => {
       const chatId = msg.chat.id;
       const fromId = msg.from && msg.from.id ? String(msg.from.id) : null;
       const text = (msg.text || '').trim();
+      const { cmd, args } = parseTgCommand(text);
       const webAppUrl = process.env.WEBAPP_URL || '';
 
-      if (text.startsWith('/start')) {
-        const parts = text.split(' ');
-        const code = parts.length > 1 ? parts[1].trim() : null;
+      if (cmd === 'start') {
+        const code = args.length > 0 ? String(args[0]).trim() : null;
         if (code) {
           try {
             const link = await prisma.telegramLink.findUnique({ where: { code } });
@@ -49,7 +59,7 @@ router.post('/webhook', async (req, res) => {
           const keyboard = webAppUrl ? { reply_markup: inlineKeyboardWithWebApp('Открыть панель', webAppUrl) } : {};
           await sendMessage(chatId, 'Добро пожаловать! Используйте /help для подсказок.', keyboard);
         }
-      } else if (text === '/help') {
+      } else if (cmd === 'help') {
         const help = [
           'Команды:',
           '/start — приветствие',
@@ -58,7 +68,7 @@ router.post('/webhook', async (req, res) => {
         ].join('\n');
         const keyboard = webAppUrl ? { reply_markup: inlineKeyboardWithWebApp('Открыть панель', webAppUrl) } : {};
         await sendMessage(chatId, help, keyboard);
-      } else if (text === '/unlink') {
+      } else if (cmd === 'unlink') {
         try {
           const user = await prisma.user.findUnique({ where: { telegramId: fromId } });
           if (!user) {

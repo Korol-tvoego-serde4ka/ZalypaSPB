@@ -60,7 +60,8 @@ body {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
     width: 100%;
     padding: 12px 16px;
     background: #121212;
@@ -88,6 +89,11 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-inline {
+    width: auto;
+    padding: 10px 16px;
 }
 
 .btn:hover {
@@ -566,6 +572,12 @@ tr:hover {
     padding: 25px;
     border-radius: 12px;
     margin-bottom: 20px;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
 }
 
 .settings-title {
