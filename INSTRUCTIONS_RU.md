@@ -21,7 +21,22 @@
 - TELEGRAM_API_BASE=https://api.telegram.org
 - WEBAPP_URL=https://<домен> (для кнопки «Открыть панель» в боте)
 
-## 3) Установка зависимостей и Prisma
+## 3) Установка зависимостей (прод)
+
+1) Базовые пакеты ОС (Ubuntu 22.04):
+```
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg git unzip
+```
+
+2) Node.js (LTS 18.x через NodeSource):
+```
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+node -v && npm -v
+```
+
+3) Зависимости проекта и Prisma (в каталоге проекта):
 ```
 npm ci
 npm run prisma:generate
@@ -38,13 +53,21 @@ npm run seed
 - testadmin (Admin) / пароль demo
 А также баланс реселлера, продукты и релиз лоадера.
 
-## 5) Запуск сервера
-- Через systemd (см. deployment/systemd/zalypa.service)
-- Локально: `node server.js` (для отладки)
+## 5) Запуск сервера (только прод)
+- Рекомендуется запускать через systemd (см. `deployment/systemd/zalypa.service`).
+- Пример команд:
+  - `sudo cp deployment/systemd/zalypa.service /etc/systemd/system/`
+  - `sudo systemctl daemon-reload`
+  - `sudo systemctl enable zalypa`
+  - `sudo systemctl start zalypa`
+  - Проверка статуса: `sudo systemctl status zalypa`
 
-## 6) Nginx и TLS
-- Конфиг: deployment/nginx/dinozavrikgugl.ru.conf
-- Настройте certbot для выпуска сертификатов Let’s Encrypt.
+## 6) Nginx и TLS (прод)
+- Конфиг-пример: `deployment/nginx/dinozavrikgugl.ru.conf`
+- Включите сайт и перезапустите Nginx:
+  - `sudo ln -s /opt/zalypa/deployment/nginx/dinozavrikgugl.ru.conf /etc/nginx/sites-enabled/zalypa.conf`
+  - `sudo nginx -t && sudo systemctl reload nginx`
+- Выпустите сертификаты Let’s Encrypt (certbot) для домена.
 
 ## 7) Маршруты API (основные)
 Аутентификация:
@@ -97,7 +120,7 @@ Telegram:
 - Открывается по https://<домен>/downloads/<файл>
 - Последнюю версию отдаёт /api/loader/latest (берётся из таблицы LoaderRelease)
 
-## 10) Обновление версии
+## 10) Обновление версии (прод)
 ```
 # в каталоге проекта
 git pull
@@ -107,7 +130,7 @@ sudo systemctl restart zalypa
 sudo systemctl reload nginx
 ```
 
-## 11) Безопасность
+## 11) Безопасность (прод)
 - **CSP (Helmet)**: включена с политикой по умолчанию и разрешёнными источниками
   - default-src 'self'
   - script-src 'self' 'unsafe-inline' (оставляем как есть под текущий UI)
@@ -116,12 +139,12 @@ sudo systemctl reload nginx
   - img-src 'self' data:
   - font-src 'self' https://fonts.gstatic.com data:
   - frame-ancestors 'none'
-- **Cookies**: JWT хранится в httpOnly cookie, SameSite=Lax, Secure=true (за HTTPS через Nginx).
+- **Cookies**: JWT хранится в httpOnly cookie, SameSite=Lax, Secure=true (за HTTPS через Nginx). Не переключайте Secure=false в проде.
 - **Rate limiting**: /api — 300 запросов/15мин; /api/auth — 20 запросов/15мин.
 - **Express-validator**: установлен. Общая прослойка — `api/middleware/validate.js`.
   - При расширении API добавляйте схемы проверок для тел/строк/чисел.
 
-## 12) Telegram
+## 12) Telegram (прод)
 - Переменные окружения: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_GROUP_ID` (опц.), `TELEGRAM_API_BASE`.
 - Webhook:
   - Команда установки webhook:
@@ -144,6 +167,18 @@ UI Админа (вкладка Telegram):
 - Форма рассылки: текст, аудитория (Все/User/Reseller/Admin), флаг «Также отправить в группу».
 - Таблица заявок на отвязку: кнопки «Одобрить»/«Отклонить» для заявок со статусом PENDING.
 
-## 13) Примечания
-- Сид-аккаунты (testuser/testreseller/testadmin, пароль `demo`) созданы для проверки. В проде смените пароли или удалите эти записи.
+## 13) Примечания (прод)
+- Сид-аккаунты (testuser/testreseller/testadmin, пароль `demo`) предназначены только для первичной проверки. В проде сразу смените пароли ИЛИ не запускайте `npm run seed`, если база уже заполнена.
 - Для публикации новых версий лоадера добавьте файл в `/downloads` и запись в таблицу `LoaderRelease`.
+
+## 14) Продакшен чек-лист
+- DNS записан на сервер, порт 443 открыт.
+- .env заполнен (PORT, NODE_ENV=production, JWT_SECRET, COOKIE_SECURE=true, DATABASE_URL, TELEGRAM_* , WEBAPP_URL).
+- Prisma миграции применены: `npm run prisma:migrate:deploy`.
+- Сервис запущен и включен в автозагрузку: `systemctl enable --now zalypa`.
+- Webhook бота установлен.
+- Nginx отдает HTTPS и проксирует на приложение.
+- Проверка:
+  - `curl -s https://<домен>/healthz` → `{"status":"ok"}`
+  - Авторизация в панели, загрузка продуктов и лоадера работает.
+  - Разделы Telegram в UI отображают статус и позволяют привязку/заявку на отвязку.
