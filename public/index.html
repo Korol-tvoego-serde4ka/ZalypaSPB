@@ -188,6 +188,7 @@
             <div class="navigation">
                 <button class="nav-btn active" data-section="resellerUsers">Пользователи</button>
                 <button class="nav-btn" data-section="resellerProducts">Продукты</button>
+                <button class="nav-btn" data-section="resellerPurchases">История покупок</button>
                 <button class="nav-btn" data-section="resellerStatistics">Статистика</button>
                 <button class="nav-btn" data-section="resellerTelegram">Telegram</button>
             </div>
@@ -228,6 +229,27 @@
                             </tr>
                         </thead>
                         <tbody id="resellerProductsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="resellerPurchases" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">История покупок</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Дата</th>
+                                <th>Продукт</th>
+                                <th>Ключ</th>
+                                <th>Сумма</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resellerPurchasesTable"></tbody>
                     </table>
                 </div>
             </div>

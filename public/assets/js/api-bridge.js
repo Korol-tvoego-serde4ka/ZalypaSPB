@@ -59,6 +59,7 @@
       if (sectionId === 'userTelegram') loadUserTelegram();
       if (sectionId === 'resellerUsers') loadResellerUsers();
       if (sectionId === 'resellerProducts') loadResellerProducts();
+      if (sectionId === 'resellerPurchases') loadResellerPurchases();
       if (sectionId === 'resellerStatistics') updateResellerStats();
       if (sectionId === 'resellerTelegram') loadResellerTelegram();
       if (sectionId === 'adminUsers') loadAdminUsers();
@@ -115,6 +116,49 @@
     if (rf) rf.classList.remove('hidden');
     if (le) le.classList.add('hidden');
     if (re) re.classList.add('hidden');
+  };
+
+  // Reseller: Purchases history
+  window.loadResellerPurchases = async function(){
+    const tbody = document.getElementById('resellerPurchasesTable');
+    if (!tbody) return;
+    tbody.innerHTML='';
+    try {
+      const resp = await api('/api/reseller/purchases');
+      const items = resp.items || [];
+      if (!items.length) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="6" style="text-align:center;opacity:.7;">Нет покупок</td>';
+        tbody.appendChild(tr);
+        return;
+      }
+      items.forEach(it => {
+        const tr = document.createElement('tr');
+        const dt = it.createdAt ? new Date(it.createdAt).toLocaleString('ru-RU') : '';
+        const sum = ((Math.abs(it.amountCents || 0))/100).toLocaleString('ru-RU');
+        const prod = it.product ? `${it.product.id} — ${it.product.name}` : '—';
+        const keyShort = it.keyToken ? (it.keyToken.slice(0,6)+'…'+it.keyToken.slice(-4)) : '—';
+        tr.innerHTML = `
+          <td>${it.id}</td>
+          <td>${sanitizeInput(dt)}</td>
+          <td>${sanitizeInput(prod)}</td>
+          <td>${sanitizeInput(keyShort)} ${it.keyToken ? '<button class="btn-action" data-act="copy" data-token="'+it.keyToken+'">Копировать</button>' : ''}</td>
+          <td>₽${sum}</td>
+          <td></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-act="copy"]').forEach(btn => {
+        btn.addEventListener('click', async (e)=>{
+          const token = e.currentTarget.getAttribute('data-token');
+          try { await navigator.clipboard.writeText(token); showNotification('Ключ скопирован', 'success'); } catch(_) { showNotification('Не удалось скопировать', 'error'); }
+        });
+      });
+    } catch(_) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="6" style="text-align:center;color:#f44336;">Ошибка загрузки</td>';
+      tbody.appendChild(tr);
+    }
   };
 
   // Admin: bulk keys upload form handler
@@ -842,10 +886,13 @@
         tr.innerHTML = `
           <td>${product.id}</td>
           <td>${sanitizeInput(product.name)}</td>
-          <td>${sanitizeInput(product.type || '')}</td>
+          <td>${Number(product.reservedCount || 0)}</td>
           <td>₽${price}</td>
           <td>
-            <button class="btn-action" data-act="res-prod-buy" data-id="${product.id}">Купить ключ</button>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="number" min="1" max="100" value="1" class="qty-input" data-id="${product.id}" style="width:72px; padding:6px;">
+              <button class="btn-action" data-act="res-prod-buy" data-id="${product.id}">Купить</button>
+            </div>
           </td>
         `;
         tbody.appendChild(tr);
@@ -856,15 +903,18 @@
           const id = Number(ev.currentTarget.getAttribute('data-id'));
           if (act === 'res-prod-buy') {
             try {
-              const resp = await api('/api/reseller/keys/buy', { method: 'POST', body: JSON.stringify({ productId: id }) });
-              const token = resp && resp.key && resp.key.token ? resp.key.token : null;
-              if (token) {
-                try { await navigator.clipboard.writeText(token); } catch(_){ }
-                showNotification('Ключ куплен и скопирован в буфер', 'success');
+              const tr = ev.currentTarget.closest('tr');
+              const qtyEl = tr.querySelector('.qty-input');
+              const qty = Math.max(1, Math.min(100, Number(qtyEl?.value || 1)));
+              const resp = await api('/api/reseller/keys/buy', { method: 'POST', body: JSON.stringify({ productId: id, quantity: qty }) });
+              const tokens = (resp.keys ? resp.keys.map(k=>k.token) : (resp.key?.token ? [resp.key.token] : []));
+              if (tokens.length) {
+                try { await navigator.clipboard.writeText(tokens.join('\n')); showNotification(`Ключей куплено: ${tokens.length}. Скопировано в буфер`, 'success'); } catch(_) { showNotification(`Ключей куплено: ${tokens.length}`, 'success'); }
               } else {
-                showNotification('Ключ куплен', 'success');
+                showNotification('Покупка завершена', 'success');
               }
-              try { await updateResellerStats(); } catch(_){ }
+              try { await loadResellerProducts(); } catch(_){ }
+              try { if (document.getElementById('resellerPurchases').classList.contains('active')) await loadResellerPurchases(); } catch(_){ }
             } catch (e) {
               const code = e && e.payload && e.payload.error;
               if (code === 'insufficient_balance') showNotification('Недостаточно средств', 'error');
