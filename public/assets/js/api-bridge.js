@@ -136,6 +136,38 @@
         `;
         tbody.appendChild(tr);
       });
+
+  // Admin: upload loader form (multipart)
+  document.addEventListener('DOMContentLoaded', () => {
+    const f = document.getElementById('adminUploadLoaderForm');
+    if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('adminLoaderMsg');
+      if (msg) { msg.classList.add('hidden'); msg.textContent=''; }
+      const fileEl = document.getElementById('ldrFile');
+      const verEl = document.getElementById('ldrVersion');
+      const sumEl = document.getElementById('ldrChecksum');
+      if (!fileEl?.files?.[0] || !verEl?.value) { if (msg) { msg.textContent='Заполните версию и файл'; msg.classList.remove('hidden'); } return; }
+      const fd = new FormData();
+      fd.append('file', fileEl.files[0]);
+      fd.append('version', verEl.value.trim());
+      if (sumEl?.value) fd.append('checksum', sumEl.value.trim());
+      try {
+        const res = await fetch('/api/admin/loader/release', { method: 'POST', body: fd });
+        if (!res.ok) throw new Error('upload_fail');
+        await res.json();
+        showNotification('Релиз загружен', 'success');
+        try { await loadAdminLoaderReleases(); } catch(_){ }
+        verEl.value = '';
+        fileEl.value = '';
+        if (sumEl) sumEl.value = '';
+      } catch(_) {
+        if (msg) { msg.textContent='Ошибка загрузки'; msg.classList.remove('hidden'); }
+        showNotification('Ошибка загрузки', 'error');
+      }
+    }, { capture: true });
+  });
       tbody.querySelectorAll('button[data-act="ldr-copy"]').forEach(btn => {
         btn.addEventListener('click', async (e)=>{
           const url = e.currentTarget.getAttribute('data-url');
@@ -170,37 +202,6 @@
         tbody.appendChild(tr);
       });
 
-  // Admin: upload loader form (multipart)
-  document.addEventListener('DOMContentLoaded', () => {
-    const f = document.getElementById('adminUploadLoaderForm');
-    if (!f) return;
-    f.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('adminLoaderMsg');
-      if (msg) { msg.classList.add('hidden'); msg.textContent=''; }
-      const fileEl = document.getElementById('ldrFile');
-      const verEl = document.getElementById('ldrVersion');
-      const sumEl = document.getElementById('ldrChecksum');
-      if (!fileEl?.files?.[0] || !verEl?.value) { if (msg) { msg.textContent='Заполните версию и файл'; msg.classList.remove('hidden'); } return; }
-      const fd = new FormData();
-      fd.append('file', fileEl.files[0]);
-      fd.append('version', verEl.value.trim());
-      if (sumEl?.value) fd.append('checksum', sumEl.value.trim());
-      try {
-        const res = await fetch('/api/admin/loader/release', { method: 'POST', body: fd });
-        if (!res.ok) throw new Error('upload_fail');
-        await res.json();
-        showNotification('Релиз загружен', 'success');
-        try { await loadAdminLoaderReleases(); } catch(_){}
-        verEl.value = '';
-        fileEl.value = '';
-        if (sumEl) sumEl.value = '';
-      } catch(_) {
-        if (msg) { msg.textContent='Ошибка загрузки'; msg.classList.remove('hidden'); }
-        showNotification('Ошибка загрузки', 'error');
-      }
-    }, { capture: true });
-  });
       tbody.querySelectorAll('button[data-act]').forEach(btn => {
         btn.addEventListener('click', async (e)=>{
           const id = Number(e.currentTarget.getAttribute('data-id'));

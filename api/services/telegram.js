@@ -28,7 +28,8 @@ async function call(method, params) {
 }
 
 async function sendMessage(chatId, text, options = {}) {
-  return call('sendMessage', { chat_id: chatId, text, parse_mode: options.parse_mode || 'HTML', disable_web_page_preview: true, ...options });
+  const payload = { chat_id: chatId, text, disable_web_page_preview: true, ...options };
+  return call('sendMessage', payload);
 }
 
 let botUsernameCache = null;
