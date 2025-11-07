@@ -80,6 +80,7 @@
                 <button class="nav-btn" data-section="userProducts">Продукты</button>
                 <button class="nav-btn" data-section="userStatistics">Статистика</button>
                 <button class="nav-btn" data-section="userTelegram">Telegram</button>
+                <button class="nav-btn" data-section="userSettings">Настройки</button>
             </div>
 
             <div id="userLoader" class="content-section active">
@@ -124,6 +125,30 @@
                         <h2 class="table-title">Telegram</h2>
                     </div>
                     <div id="userTelegramContainer"></div>
+                </div>
+            </div>
+
+            <div id="userSettings" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Настройки аккаунта</h2>
+                    </div>
+                    <form id="userChangePasswordForm">
+                        <div class="form-group">
+                            <label for="userCurrentPassword">Текущий пароль (если установлен)</label>
+                            <input type="password" id="userCurrentPassword" autocomplete="current-password">
+                        </div>
+                        <div class="form-group">
+                            <label for="userNewPassword">Новый пароль</label>
+                            <input type="password" id="userNewPassword" required autocomplete="new-password">
+                        </div>
+                        <div class="form-group">
+                            <label for="userNewPassword2">Подтверждение пароля</label>
+                            <input type="password" id="userNewPassword2" required autocomplete="new-password">
+                        </div>
+                        <button type="submit" class="btn">Сменить пароль</button>
+                        <div id="userSettingsMsg" class="error-message hidden"></div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -239,6 +264,7 @@
                 <button class="nav-btn active" data-section="adminUsers">Все пользователи</button>
                 <button class="nav-btn" data-section="adminResellers">Реселлеры</button>
                 <button class="nav-btn" data-section="adminLogs">Логи аудита</button>
+                <button class="nav-btn" data-section="adminInvites">Инвайты</button>
                 <button class="nav-btn" data-section="adminSettings">Настройки</button>
                 <button class="nav-btn" data-section="adminTelegram">Telegram</button>
             </div>
@@ -290,6 +316,48 @@
                         <h2 class="table-title">Журнал аудита</h2>
                     </div>
                     <div id="adminLogsContainer"></div>
+                </div>
+            </div>
+
+            <div id="adminInvites" class="content-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Инвайты</h2>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-title">Создать инвайты</div>
+                        <form id="adminCreateInvitesForm">
+                            <div class="form-group">
+                                <label>Количество</label>
+                                <input type="number" id="invCount" min="1" max="100" value="1">
+                            </div>
+                            <div class="form-group">
+                                <label>Срок действия (дней, опционально)</label>
+                                <input type="number" id="invExpiresDays" min="1" placeholder="например, 7">
+                            </div>
+                            <div class="form-group">
+                                <label>Или свои коды (по одному в строке)</label>
+                                <textarea id="invCodes" rows="3" placeholder="code-1\ncode-2"></textarea>
+                            </div>
+                            <button type="submit" class="btn">Создать</button>
+                            <div id="adminInvitesMsg" class="error-message hidden"></div>
+                        </form>
+                    </div>
+                    <div class="table-header" style="margin-top:24px;">
+                        <h2 class="table-title">Список инвайтов</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Код</th>
+                                <th>Истекает</th>
+                                <th>Использован</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminInvitesTable"></tbody>
+                    </table>
                 </div>
             </div>
 
@@ -360,7 +428,9 @@
                             <label><input type="checkbox" id="adminBroadcastIncludeGroup"> Также отправить в группу</label>
                         </div>
                         <button id="btnAdminBroadcast" class="btn">Отправить</button>
+                        <button id="btnCheckBot" class="btn" style="margin-left:8px;">Проверить бота</button>
                         <div id="adminBroadcastResult" style="margin-top:8px;"></div>
+                        <div id="adminBotStatusResult" style="margin-top:8px;"></div>
                     </div>
                     <div class="table-header" style="margin-top:24px;">
                         <h2 class="table-title">Заявки на отвязку</h2>

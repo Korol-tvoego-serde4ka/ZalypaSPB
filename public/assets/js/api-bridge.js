@@ -66,6 +66,7 @@
       if (sectionId === 'adminLogs') loadAdminLogs();
       if (sectionId === 'adminSettings') updateAdminStats();
       if (sectionId === 'adminTelegram') loadAdminUnlinkRequests();
+      if (sectionId === 'adminInvites') loadAdminInvites();
     } catch(_){}
   }
 
@@ -158,6 +159,66 @@
     }, { capture: true });
   });
 
+  // Admin: create invites form
+  document.addEventListener('DOMContentLoaded', () => {
+    const f = document.getElementById('adminCreateInvitesForm');
+    if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('adminInvitesMsg');
+      if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
+      const count = Number(document.getElementById('invCount')?.value || 1);
+      const expiresDays = document.getElementById('invExpiresDays')?.value ? Number(document.getElementById('invExpiresDays').value) : undefined;
+      const codesRaw = (document.getElementById('invCodes')?.value || '').trim();
+      const codes = codesRaw ? codesRaw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean) : undefined;
+      const payload = {};
+      if (codes && codes.length) payload.codes = codes;
+      else payload.count = Math.max(1, Math.min(100, count));
+      if (expiresDays) payload.expiresDays = Math.max(1, expiresDays);
+      try {
+        const r = await api('/api/admin/invites', { method: 'POST', body: JSON.stringify(payload) });
+        const items = r.items || [];
+        showNotification(`Создано инвайтов: ${items.length}`, 'success');
+        try { await loadAdminInvites(); } catch(_){}
+      } catch (err) {
+        if (msg) { msg.textContent = 'Ошибка создания инвайтов'; msg.classList.remove('hidden'); }
+        showNotification('Ошибка создания инвайтов', 'error');
+      }
+    }, { capture: true });
+  });
+
+  // User: change password form
+  document.addEventListener('DOMContentLoaded', () => {
+    const f = document.getElementById('userChangePasswordForm');
+    if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cur = document.getElementById('userCurrentPassword')?.value || '';
+      const p1 = document.getElementById('userNewPassword')?.value || '';
+      const p2 = document.getElementById('userNewPassword2')?.value || '';
+      const msg = document.getElementById('userSettingsMsg');
+      if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
+      if (!p1 || p1.length < 6) { if (msg) { msg.textContent='Минимум 6 символов'; msg.classList.remove('hidden'); } return; }
+      if (p1 !== p2) { if (msg) { msg.textContent='Пароли не совпадают'; msg.classList.remove('hidden'); } return; }
+      try {
+        const body = { newPassword: p1 };
+        if (cur) body.currentPassword = cur;
+        await api('/api/me/password', { method: 'POST', body: JSON.stringify(body) });
+        showNotification('Пароль изменён', 'success');
+        (document.getElementById('userCurrentPassword')||{}).value='';
+        (document.getElementById('userNewPassword')||{}).value='';
+        (document.getElementById('userNewPassword2')||{}).value='';
+      } catch (e) {
+        const code = e && e.payload && e.payload.error;
+        let text = 'Ошибка изменения пароля';
+        if (code === 'current_required') text = 'Нужен текущий пароль';
+        else if (code === 'invalid_current') text = 'Текущий пароль неверен';
+        if (msg) { msg.textContent = text; msg.classList.remove('hidden'); }
+        showNotification(text, 'error');
+      }
+    }, { capture: true });
+  });
+
   document.addEventListener('click', (e) => {
     const navBtn = e.target.closest('.nav-btn');
     if (navBtn && navBtn.dataset.section) {
@@ -175,6 +236,24 @@
     if (broadcastBtn) {
       e.preventDefault();
       window.sendAdminBroadcast();
+      return;
+    }
+    const botCheckBtn = e.target.closest('#btnCheckBot');
+    if (botCheckBtn) {
+      e.preventDefault();
+      (async ()=>{
+        const out = document.getElementById('adminBotStatusResult');
+        if (out) out.textContent = 'Проверка бота...';
+        try {
+          const r = await api('/api/telegram/status');
+          if (out) out.textContent = `OK. Бот @${r.username}`;
+          showNotification('Бот доступен', 'success');
+        } catch (e) {
+          const msg = (e && e.payload && e.payload.error) || 'bot_error';
+          if (out) out.textContent = `Ошибка: ${msg}`;
+          showNotification('Ошибка проверки бота', 'error');
+        }
+      })();
       return;
     }
   }, { capture: true });
@@ -229,6 +308,37 @@
         </div>
       `;
     } catch(_) {}
+  };
+
+  // Admin: Invites list loader
+  window.loadAdminInvites = async function(){
+    const tbody = document.getElementById('adminInvitesTable');
+    if (!tbody) return;
+    tbody.innerHTML='';
+    try {
+      const resp = await api('/api/admin/invites');
+      (resp.items || []).forEach(inv => {
+        const tr = document.createElement('tr');
+        const exp = inv.expiresAt ? new Date(inv.expiresAt).toLocaleString('ru-RU') : '—';
+        const used = inv.usedById ? `Да (ID ${inv.usedById})` : 'Нет';
+        tr.innerHTML = `
+          <td>${inv.id}</td>
+          <td><code>${sanitizeInput(inv.code)}</code></td>
+          <td>${sanitizeInput(exp)}</td>
+          <td>${sanitizeInput(used)}</td>
+          <td>
+            <button class="btn-action" data-act="inv-del" data-id="${inv.id}" ${inv.usedById ? 'disabled' : ''}>Удалить</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-act="inv-del"]').forEach(btn => {
+        btn.addEventListener('click', async (e)=>{
+          const id = Number(e.currentTarget.getAttribute('data-id'));
+          try { await api(`/api/admin/invites/${id}`, { method: 'DELETE' }); showNotification('Инвайт удалён', 'success'); await loadAdminInvites(); } catch(_){ showNotification('Ошибка удаления', 'error'); }
+        });
+      });
+    } catch(_){ }
   };
 
   // Admin: Telegram broadcast

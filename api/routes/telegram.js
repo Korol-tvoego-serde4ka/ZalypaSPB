@@ -85,6 +85,17 @@ router.post('/webhook', async (req, res) => {
   return res.json({ ok: true });
 });
 
+// Bot status (admin only)
+router.get('/status', requireAuth, requireRoles('Admin'), async (_req, res) => {
+  try {
+    const username = await getBotUsername();
+    if (!username) return res.status(500).json({ ok: false, error: 'bot_unavailable' });
+    return res.json({ ok: true, username });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'bot_error' });
+  }
+});
+
 // Admin-triggered broadcast
 router.post(
   '/broadcast',
