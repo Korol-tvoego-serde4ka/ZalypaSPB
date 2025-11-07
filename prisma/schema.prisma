@@ -52,6 +52,11 @@ model User {
   keysUsed        Key[]           @relation("KeyUsedBy")
   invitesCreated  Invite[]        @relation("InvitesCreatedBy")
   auditLogs       AuditLog[]      @relation("AuditActor")
+  invitesUsed     Invite[]        @relation("InvitesUsedBy")
+  keysOwnedAsReseller Key[]       @relation("KeyOwnerReseller")
+  transactions    Transaction[]
+  telegramLinks   TelegramLink[]
+  telegramUnlinkRequests TelegramUnlinkRequest[]
 }
 
 model Invite {
@@ -65,7 +70,7 @@ model Invite {
   createdAt   DateTime  @default(now())
 
   createdBy   User?     @relation("InvitesCreatedBy", fields: [createdById], references: [id])
-  usedBy      User?     @relation(fields: [usedById], references: [id])
+  usedBy      User?     @relation("InvitesUsedBy", fields: [usedById], references: [id])
 }
 
 model Product {

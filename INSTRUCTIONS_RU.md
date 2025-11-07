@@ -38,10 +38,34 @@ node -v && npm -v
 
 3) Зависимости проекта и Prisma (в каталоге проекта):
 ```
-npm ci
-npm run prisma:generate
-npm run prisma:migrate:deploy
+# Если в репо есть package-lock.json — используйте npm ci
+# Если lock-файла нет — первый раз используйте npm install
+[ -f package-lock.json ] && npm ci || npm install --include=dev
+
+# Генерация Prisma Client
+npx prisma generate
 ```
+
+## 3.1) Первый деплой (для этого репозитория «как есть»)
+- В этом репо нет package-lock.json и каталога prisma/migrations.
+- Поэтому на первом деплое применяйте схему БД напрямую, а затем (по возможности) закоммитьте lockfile и миграции для будущих деплоев.
+
+Шаги первого деплоя:
+```
+# 1) Установить зависимости (см. выше п.3)
+
+# 2) Применить схему БД (создаст таблицы по schema.prisma)
+npx prisma db push
+
+# 3) (Опционально) заполнить стартовыми данными
+npm run seed
+```
+
+Рекомендации для будущих деплоев (выполнить на dev и закоммитить в репо):
+- Сгенерировать миграции: `npx prisma migrate dev --name init`
+- Закоммитить папку `prisma/migrations` и `package-lock.json`, чтобы на проде использовать:
+  - `npm ci`
+  - `npx prisma migrate deploy`
 
 ## 4) Сид начальных данных
 ```
