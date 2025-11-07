@@ -76,7 +76,11 @@
   window.closeModal = function(id){ const el = document.getElementById(id); if (el) el.classList.remove('active'); };
 
   async function api(path, opts={}){
-    const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    const init = { cache: 'no-store', headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) }, ...opts };
+    let res = await fetch(path, init);
+    if (res.status === 304) {
+      try { res = await fetch(path, { cache: 'reload', headers: init.headers, method: init.method }); } catch(_) {}
+    }
     if (!res.ok) {
       let err = null;
       try { err = await res.json(); } catch(_) {}
@@ -175,13 +179,20 @@
     tbody.innerHTML='';
     try {
       const resp = await api('/api/admin/loader/releases');
-      (resp.items || []).forEach(rel => {
+      const list = resp.items || [];
+      if (!list.length) {
+        const empty = document.createElement('tr');
+        empty.innerHTML = `<td colspan="6" style="text-align:center;opacity:.7;">Нет релизов</td>`;
+        tbody.appendChild(empty);
+        return;
+      }
+      list.forEach(rel => {
         const tr = document.createElement('tr');
         const created = rel.createdAt ? new Date(rel.createdAt).toLocaleString('ru-RU') : '';
         const fileUrl = rel.filePath || '';
         tr.innerHTML = `
           <td>${rel.id}</td>
-          <td>${sanitizeInput(rel.version)}</td>
+          <td>${sanitizeInput(rel.version || '')}</td>
           <td><a href="${sanitizeInput(fileUrl)}" target="_blank" rel="noopener">${sanitizeInput(fileUrl.split('/').pop() || fileUrl)}</a></td>
           <td><code>${sanitizeInput((rel.checksum || '').slice(0, 16))}...</code></td>
           <td>${sanitizeInput(created)}</td>
@@ -229,7 +240,11 @@
           try { await navigator.clipboard.writeText(location.origin + url); showNotification('Ссылка скопирована', 'success'); } catch(_){ showNotification('Не удалось скопировать', 'error'); }
         });
       });
-    } catch(_){ }
+    } catch(_){
+      const errRow = document.createElement('tr');
+      errRow.innerHTML = `<td colspan="6" style="text-align:center;color:#f44336;">Ошибка загрузки списка релизов</td>`;
+      tbody.appendChild(errRow);
+    }
   };
 
   // Admin: Products list loader
