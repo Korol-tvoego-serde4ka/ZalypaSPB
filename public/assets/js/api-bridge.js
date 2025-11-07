@@ -54,8 +54,17 @@
     if(btn) btn.classList.add('active');
     // Lazy load per section
     try {
+      if (sectionId === 'userLoader') loadLoaderRelease();
+      if (sectionId === 'userProducts') loadUserProducts();
       if (sectionId === 'userTelegram') loadUserTelegram();
+      if (sectionId === 'resellerUsers') loadResellerUsers();
+      if (sectionId === 'resellerProducts') loadResellerProducts();
+      if (sectionId === 'resellerStatistics') updateResellerStats();
       if (sectionId === 'resellerTelegram') loadResellerTelegram();
+      if (sectionId === 'adminUsers') loadAdminUsers();
+      if (sectionId === 'adminResellers') loadAdminResellers();
+      if (sectionId === 'adminLogs') loadAdminLogs();
+      if (sectionId === 'adminSettings') updateAdminStats();
       if (sectionId === 'adminTelegram') loadAdminUnlinkRequests();
     } catch(_){}
   }
@@ -148,6 +157,27 @@
       }
     }, { capture: true });
   });
+
+  document.addEventListener('click', (e) => {
+    const navBtn = e.target.closest('.nav-btn');
+    if (navBtn && navBtn.dataset.section) {
+      e.preventDefault();
+      showSection(navBtn, navBtn.dataset.section);
+      return;
+    }
+    const logoutBtn = e.target.closest('.btn-logout');
+    if (logoutBtn) {
+      e.preventDefault();
+      window.logout();
+      return;
+    }
+    const broadcastBtn = e.target.closest('#btnAdminBroadcast');
+    if (broadcastBtn) {
+      e.preventDefault();
+      window.sendAdminBroadcast();
+      return;
+    }
+  }, { capture: true });
 
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('registerForm');
@@ -433,17 +463,33 @@
           <td>${sanitizeInput(product.type || '')}</td>
           <td>₽${price}</td>
           <td>
-            <button class="btn-action btn-edit" data-act="res-prod-edit" data-id="${product.id}">Редактировать</button>
-            <button class="btn-action btn-delete" data-act="res-prod-del" data-id="${product.id}">Удалить</button>
+            <button class="btn-action" data-act="res-prod-buy" data-id="${product.id}">Купить ключ</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
       tbody.querySelectorAll('button[data-act]')?.forEach(btn => {
-        btn.addEventListener('click', (ev)=>{
+        btn.addEventListener('click', async (ev)=>{
           const act = ev.currentTarget.getAttribute('data-act');
-          if (act === 'res-prod-edit') showNotification('Редактирование позже', 'info');
-          if (act === 'res-prod-del') showNotification('Удаление позже', 'info');
+          const id = Number(ev.currentTarget.getAttribute('data-id'));
+          if (act === 'res-prod-buy') {
+            try {
+              const resp = await api('/api/reseller/keys/buy', { method: 'POST', body: JSON.stringify({ productId: id }) });
+              const token = resp && resp.key && resp.key.token ? resp.key.token : null;
+              if (token) {
+                try { await navigator.clipboard.writeText(token); } catch(_){ }
+                showNotification('Ключ куплен и скопирован в буфер', 'success');
+              } else {
+                showNotification('Ключ куплен', 'success');
+              }
+              try { await updateResellerStats(); } catch(_){ }
+            } catch (e) {
+              const code = e && e.payload && e.payload.error;
+              if (code === 'insufficient_balance') showNotification('Недостаточно средств', 'error');
+              else if (code === 'no_keys_available') showNotification('Нет доступных ключей', 'error');
+              else showNotification('Ошибка покупки', 'error');
+            }
+          }
         });
       });
     } catch(_) {}
@@ -456,6 +502,22 @@
       ]);
       document.getElementById('resellerUserCount').textContent = (uResp.items || []).length;
       document.getElementById('resellerProductCount').textContent = (pResp.items || []).length;
+    } catch(_){}
+  };
+
+  window.updateAdminStats = async function(){
+    try {
+      const [uResp, lResp] = await Promise.all([
+        api('/api/admin/users'), api('/api/admin/logs')
+      ]);
+      const users = uResp.items || [];
+      const logs = lResp.items || [];
+      const uEl = document.getElementById('adminTotalUsers');
+      const rEl = document.getElementById('adminTotalResellers');
+      const lEl = document.getElementById('adminTotalLogs');
+      if (uEl) uEl.textContent = users.length;
+      if (rEl) rEl.textContent = users.filter(u => u.role === 'Reseller').length;
+      if (lEl) lEl.textContent = logs.length;
     } catch(_){}
   };
 
@@ -474,13 +536,49 @@
           <td>${sanitizeInput(user.email)}</td>
           <td><span style="color: ${user.status === 'Активен' ? '#4CAF50' : '#f44336'}">${sanitizeInput(user.status)}</span></td>
           <td>
-            <button class="btn-action btn-edit" data-act="adm-user-view" data-id="${user.id}">Просмотр</button>
+            <div class="btn-group">
+              <button class="btn-action" data-act="adm-user-${user.status === 'Активен' ? 'block' : 'unblock'}" data-id="${user.id}">${user.status === 'Активен' ? 'Блокировать' : 'Разблокировать'}</button>
+              <button class="btn-action" data-act="adm-user-role" data-id="${user.id}" data-role="User">User</button>
+              <button class="btn-action" data-act="adm-user-role" data-id="${user.id}" data-role="Reseller">Reseller</button>
+              <button class="btn-action" data-act="adm-user-role" data-id="${user.id}" data-role="Admin">Admin</button>
+              <button class="btn-action" data-act="adm-user-pass" data-id="${user.id}">Сброс пароля</button>
+            </div>
           </td>
         `;
         tbody.appendChild(tr);
       });
       tbody.querySelectorAll('button[data-act]')?.forEach(btn => {
-        btn.addEventListener('click', ()=> showNotification('Просмотр позже', 'info'));
+        btn.addEventListener('click', async (ev)=>{
+          const act = ev.currentTarget.getAttribute('data-act');
+          const id = Number(ev.currentTarget.getAttribute('data-id'));
+          try {
+            if (act === 'adm-user-block') {
+              await api(`/api/admin/users/${id}/block`, { method: 'POST' });
+              showNotification('Пользователь блокирован', 'success');
+              return loadAdminUsers();
+            }
+            if (act === 'adm-user-unblock') {
+              await api(`/api/admin/users/${id}/unblock`, { method: 'POST' });
+              showNotification('Пользователь разблокирован', 'success');
+              return loadAdminUsers();
+            }
+            if (act === 'adm-user-role') {
+              const role = ev.currentTarget.getAttribute('data-role');
+              await api(`/api/admin/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role }) });
+              showNotification('Роль обновлена', 'success');
+              return loadAdminUsers();
+            }
+            if (act === 'adm-user-pass') {
+              const pwd = prompt('Введите новый пароль (минимум 6 символов)');
+              if (!pwd || pwd.length < 6) { showNotification('Пароль не изменён', 'info'); return; }
+              await api(`/api/admin/users/${id}/password`, { method: 'POST', body: JSON.stringify({ password: pwd }) });
+              showNotification('Пароль обновлён', 'success');
+              return;
+            }
+          } catch(_) {
+            showNotification('Ошибка выполнения действия', 'error');
+          }
+        });
       });
     } catch(_){}
   };

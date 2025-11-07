@@ -3,6 +3,8 @@ const router = express.Router();
 const { requireAuth, requireRoles } = require('../middleware/auth');
 const { prisma } = require('../db/client');
 const { sendMessage, getBotUsername, inlineKeyboardWithWebApp } = require('../services/telegram');
+const { body } = require('express-validator');
+const { validate } = require('../middleware/validate');
 
 // Telegram webhook endpoint (set via BotFather or setWebhook)
 router.post('/webhook', async (req, res) => {
@@ -62,11 +64,16 @@ router.post('/webhook', async (req, res) => {
           if (!user) {
             await sendMessage(chatId, 'Ваш Telegram не найден среди привязанных аккаунтов.');
           } else {
-            await prisma.user.update({ where: { id: user.id }, data: { telegramId: null } });
-            await sendMessage(chatId, 'Telegram успешно отвязан от аккаунта.');
+            const pending = await prisma.telegramUnlinkRequest.findFirst({ where: { userId: user.id, status: 'PENDING' } });
+            if (pending) {
+              await sendMessage(chatId, 'У вас уже есть активная заявка на отвязку. Ожидайте решения администратора.');
+            } else {
+              await prisma.telegramUnlinkRequest.create({ data: { userId: user.id, reason: 'Запрос через бота' } });
+              await sendMessage(chatId, 'Заявка на отвязку создана и отправлена на модерацию.');
+            }
           }
         } catch (_) {
-          await sendMessage(chatId, 'Ошибка отвязки. Попробуйте позже.');
+          await sendMessage(chatId, 'Ошибка обработки заявки. Попробуйте позже.');
         }
       } else {
         // Нейтральный ответ
@@ -79,9 +86,19 @@ router.post('/webhook', async (req, res) => {
 });
 
 // Admin-triggered broadcast
-router.post('/broadcast', requireAuth, requireRoles('Admin'), async (req, res) => {
+router.post(
+  '/broadcast',
+  requireAuth,
+  requireRoles('Admin'),
+  [
+    body('text').isString().trim().isLength({ min: 1, max: 4000 }),
+    body('roles').optional().isArray(),
+    body('roles.*').optional().isString().isIn(['User','Reseller','Admin']),
+    body('include_group').optional().isBoolean(),
+    validate,
+  ],
+  async (req, res) => {
   const { text, roles, include_group } = req.body || {};
-  if (!text) return res.status(400).json({ error: 'invalid_payload' });
   if (!process.env.DATABASE_URL) return res.status(501).json({ error: 'not_supported' });
   try {
     const where = { telegramId: { not: null } };
@@ -134,16 +151,20 @@ router.get('/link/status', requireAuth, async (req, res) => {
 });
 
 // Unlink from web
-router.post('/link/unlink', requireAuth, async (req, res) => {
-  try {
-    const { reason } = req.body || {};
-    const pending = await prisma.telegramUnlinkRequest.findFirst({ where: { userId: req.user.sub, status: 'PENDING' } });
-    if (pending) return res.status(409).json({ error: 'already_pending' });
-    const r = await prisma.telegramUnlinkRequest.create({ data: { userId: req.user.sub, reason: reason ? String(reason).slice(0, 500) : null } });
-    return res.json({ ok: true, request_id: r.id });
-  } catch (_) {
-    return res.status(500).json({ error: 'unlink_error' });
-  }
+router.post(
+  '/link/unlink',
+  requireAuth,
+  [ body('reason').optional().isString().isLength({ max: 500 }), validate ],
+  async (req, res) => {
+    try {
+      const { reason } = req.body || {};
+      const pending = await prisma.telegramUnlinkRequest.findFirst({ where: { userId: req.user.sub, status: 'PENDING' } });
+      if (pending) return res.status(409).json({ error: 'already_pending' });
+      const r = await prisma.telegramUnlinkRequest.create({ data: { userId: req.user.sub, reason: reason ? String(reason).slice(0, 500) : null } });
+      return res.json({ ok: true, request_id: r.id });
+    } catch (_) {
+      return res.status(500).json({ error: 'unlink_error' });
+    }
 });
 
 // Admin: list unlink requests
