@@ -123,6 +123,8 @@
 
             
 
+            
+
             <div class="navigation">
                 <button class="nav-btn active" data-section="userLoader">Loader</button>
                 <button class="nav-btn" data-section="userProducts">Продукты</button>
@@ -142,6 +144,17 @@
                 <div class="table-container">
                     <div class="table-header">
                         <h2 class="table-title">Мои продукты</h2>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-title">Активация ключа</div>
+                        <form id="userActivateKeyForm">
+                            <div class="form-group">
+                                <label for="activateKey">Ключ продукта</label>
+                                <input type="text" id="activateKey" placeholder="Вставьте ключ и нажмите Активировать" required>
+                            </div>
+                            <button type="submit" class="btn">Активировать</button>
+                            <div id="userActivateKeyMsg" class="error-message hidden" style="margin-top:10px;"></div>
+                        </form>
                     </div>
                     <div id="userProductsList" class="products-grid"></div>
                 </div>
@@ -253,7 +266,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Название</th>
-                                <th>Тип</th>
+                                <th>Резерв</th>
                                 <th>Цена</th>
                                 <th>Действия</th>
                             </tr>
@@ -405,6 +418,30 @@
                         </thead>
                         <tbody id="adminProductsTable"></tbody>
                     </table>
+                    <div class="settings-section" style="margin-top:24px;">
+                        <div class="settings-title">Массовая загрузка ключей</div>
+                        <form id="adminKeysUploadForm">
+                            <div class="form-group">
+                                <label for="keysProductId">Продукт</label>
+                                <select id="keysProductId" required>
+                                    <option value="" disabled selected>Выберите продукт</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="keysText">Ключи (по одному в строке)</label>
+                                <textarea id="keysText" rows="6" placeholder="KEY-1\nKEY-2\nKEY-3" required></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="keysResellerId">Привязать к реселлеру (ID, опционально)</label>
+                                <input type="number" id="keysResellerId" min="1" placeholder="Оставьте пустым, чтобы загрузить в общий пул">
+                            </div>
+                            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                <button type="submit" class="btn btn-inline">Загрузить ключи</button>
+                                <button type="button" class="btn btn-inline" data-section="adminProducts">Обновить продукты</button>
+                            </div>
+                            <div id="adminKeysMsg" class="error-message hidden" style="margin-top:10px;"></div>
+                        </form>
+                    </div>
                 </div>
             </div>
 

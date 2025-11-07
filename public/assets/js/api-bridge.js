@@ -113,6 +113,61 @@
     if (re) re.classList.add('hidden');
   };
 
+  // Admin: bulk keys upload form handler
+  document.addEventListener('DOMContentLoaded', () => {
+    const f = document.getElementById('adminKeysUploadForm');
+    if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('adminKeysMsg');
+      if (msg) { msg.classList.add('hidden'); msg.textContent=''; }
+      const pid = Number(document.getElementById('keysProductId')?.value || 0);
+      const keysText = (document.getElementById('keysText')?.value || '').trim();
+      const ridRaw = document.getElementById('keysResellerId')?.value;
+      const ownerResellerId = ridRaw ? Number(ridRaw) : undefined;
+      if (!pid || !keysText) { if (msg) { msg.textContent='Выберите продукт и вставьте ключи'; msg.classList.remove('hidden'); } return; }
+      try {
+        const body = { productId: pid, keysText };
+        if (ownerResellerId) body.ownerResellerId = ownerResellerId;
+        const r = await api('/api/admin/keys/upload', { method: 'POST', body: JSON.stringify(body) });
+        showNotification(`Загружено ключей: ${r.inserted}`, 'success');
+        (document.getElementById('keysText')||{}).value='';
+      } catch (e) {
+        const code = e && e.payload && e.payload.error;
+        if (code === 'insufficient_balance') { showNotification('Недостаточно средств у реселлера', 'error'); }
+        else showNotification('Ошибка загрузки ключей', 'error');
+        if (msg) { msg.textContent = 'Ошибка загрузки ключей'; msg.classList.remove('hidden'); }
+      }
+    }, { capture: true });
+  });
+
+  // User: key activation form
+  document.addEventListener('DOMContentLoaded', () => {
+    const f = document.getElementById('userActivateKeyForm');
+    if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('userActivateKeyMsg');
+      if (msg) { msg.classList.add('hidden'); msg.textContent=''; }
+      const token = (document.getElementById('activateKey')?.value || '').trim();
+      if (!token) { if (msg) { msg.textContent='Введите ключ'; msg.classList.remove('hidden'); } return; }
+      try {
+        await api('/api/keys/activate', { method: 'POST', body: JSON.stringify({ key: token }) });
+        showNotification('Ключ активирован', 'success');
+        (document.getElementById('activateKey')||{}).value='';
+        try { await loadUserProducts(); } catch(_){}
+      } catch (e) {
+        const code = e && e.payload && e.payload.error;
+        let t = 'Ошибка активации';
+        if (code === 'key_not_found') t = 'Ключ не найден';
+        else if (code === 'key_used') t = 'Ключ уже использован';
+        else if (code === 'product_disabled') t = 'Продукт недоступен';
+        if (msg) { msg.textContent = t; msg.classList.remove('hidden'); }
+        showNotification(t, 'error');
+      }
+    }, { capture: true });
+  });
+
   // Admin: Loader releases list loader
   window.loadAdminLoaderReleases = async function(){
     const tbody = document.getElementById('adminLoaderReleasesTable');
@@ -201,6 +256,19 @@
         `;
         tbody.appendChild(tr);
       });
+
+      // Fill product select for bulk keys upload
+      const sel = document.getElementById('keysProductId');
+      if (sel) {
+        const items = resp.items || [];
+        sel.innerHTML = '<option value="" disabled selected>Выберите продукт</option>';
+        items.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = String(p.id);
+          opt.textContent = `${p.id} — ${p.name}`;
+          sel.appendChild(opt);
+        });
+      }
 
       tbody.querySelectorAll('button[data-act]').forEach(btn => {
         btn.addEventListener('click', async (e)=>{
