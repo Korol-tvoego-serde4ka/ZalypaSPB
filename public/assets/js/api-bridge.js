@@ -83,6 +83,35 @@
     el.classList.remove('hidden');
   }
 
+  function setRegisterError(msg){
+    const el = document.getElementById('registerError');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  window.showRegister = function(){
+    const lf = document.getElementById('loginForm');
+    const rf = document.getElementById('registerForm');
+    const le = document.getElementById('loginError');
+    const re = document.getElementById('registerError');
+    if (lf) lf.classList.add('hidden');
+    if (rf) rf.classList.remove('hidden');
+    if (le) le.classList.add('hidden');
+    if (re) re.classList.add('hidden');
+  };
+
+  window.showLogin = function(){
+    const lf = document.getElementById('loginForm');
+    const rf = document.getElementById('registerForm');
+    const le = document.getElementById('loginError');
+    const re = document.getElementById('registerError');
+    if (rf) rf.classList.add('hidden');
+    if (lf) lf.classList.remove('hidden');
+    if (le) le.classList.add('hidden');
+    if (re) re.classList.add('hidden');
+  };
+
   // Try restore session on load
   document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -114,6 +143,39 @@
         showNotification('Успешный вход в систему!', 'success');
       } catch (err) {
         setLoginError('Неверное имя пользователя или пароль');
+      }
+    }, { capture: true });
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('registerForm');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const username = sanitizeInput(document.getElementById('regUsername').value.trim());
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const invite = document.getElementById('regInvite').value.trim();
+      if (!invite) { setRegisterError('Введите код инвайта'); return; }
+      try {
+        const payload = { username, password, invite };
+        if (email) payload.email = email;
+        const resp = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+        currentUser = { username: resp.user.username, role: resp.user.role, passwordHash: 'api' };
+        document.getElementById('loginPage').style.display = 'none';
+        showDashboard(resp.user.role);
+        if (resp.user.role === 'User') { try { await loadLoaderRelease(); } catch(_) {} }
+        showNotification('Регистрация успешна', 'success');
+      } catch (err) {
+        let msg = 'Ошибка регистрации';
+        const code = err && err.payload && err.payload.error;
+        if (code === 'invite_not_found') msg = 'Инвайт не найден';
+        else if (code === 'invite_revoked') msg = 'Инвайт отозван';
+        else if (code === 'invite_used') msg = 'Инвайт уже использован';
+        else if (code === 'invite_expired') msg = 'Инвайт истёк';
+        else if (code === 'username_or_email_taken') msg = 'Имя пользователя или email уже заняты';
+        setRegisterError(msg);
       }
     }, { capture: true });
   });
@@ -290,7 +352,10 @@
     document.getElementById('adminDashboard').classList.remove('active');
     document.getElementById('loginPage').style.display = 'flex';
     document.getElementById('loginForm').reset();
+    const rf=document.getElementById('registerForm'); if (rf) rf.classList.add('hidden');
+    const lf=document.getElementById('loginForm'); if (lf) lf.classList.remove('hidden');
     document.getElementById('loginError').classList.add('hidden');
+    const re=document.getElementById('registerError'); if (re) re.classList.add('hidden');
     showNotification('Вы вышли из системы', 'info');
   };
 
