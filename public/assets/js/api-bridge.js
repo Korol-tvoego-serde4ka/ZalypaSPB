@@ -65,7 +65,7 @@
       if (sectionId === 'adminResellers') loadAdminResellers();
       if (sectionId === 'adminLogs') loadAdminLogs();
       if (sectionId === 'adminSettings') updateAdminStats();
-      if (sectionId === 'adminTelegram') loadAdminUnlinkRequests();
+      if (sectionId === 'adminTelegram') { try { loadAdminTelegramSelf(); } catch(_){} try { loadAdminUnlinkRequests(); } catch(_){} }
       if (sectionId === 'adminInvites') loadAdminInvites();
     } catch(_){}
   }
@@ -109,6 +109,17 @@
     if (rf) rf.classList.remove('hidden');
     if (le) le.classList.add('hidden');
     if (re) re.classList.add('hidden');
+  };
+
+  // Admin: self Telegram panel
+  window.loadAdminTelegramSelf = async function(){
+    const container = document.getElementById('adminTelegramSelfContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="loader-text">Загрузка...</div>';
+    try {
+      const status = await api('/api/telegram/link/status');
+      await renderLinkInfo(container, status);
+    } catch(_) { container.innerHTML = '<div class="error-message">Ошибка загрузки</div>'; }
   };
 
   window.showLogin = function(){
@@ -307,7 +318,21 @@
           </div>
         </div>
       `;
-    } catch(_) {}
+    } catch(e) {
+      const code = e && e.payload && e.payload.error;
+      if (e && e.status === 403 && code === 'telegram_required') {
+        section.innerHTML = `
+          <div class="loader-widget">
+            <div class="loader-text">Чтобы скачать лоадер, привяжите Telegram к аккаунту.</div>
+            <div style="margin-top: 16px;">
+              <button class="btn" data-section="userTelegram">Привязать Telegram</button>
+            </div>
+          </div>
+        `;
+      } else {
+        section.innerHTML = `<div class="error-message">Ошибка загрузки информации о лоадере</div>`;
+      }
+    }
   };
 
   // Admin: Invites list loader

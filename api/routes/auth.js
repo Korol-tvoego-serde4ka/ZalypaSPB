@@ -8,10 +8,16 @@ const bcrypt = require('bcryptjs');
 const { prisma } = require('../db/client');
 const { logAudit } = require('../utils/audit');
 const { checkWebAppData, extractTelegramUser } = require('../services/telegram');
+const { body, validationResult } = require('express-validator');
+const { validate } = require('../middleware/validate');
 
 // No demo fallback: DB-only
 
-router.post('/login', async (req, res) => {
+router.post('/login', [
+  body('username').isString().trim().isLength({ min: 1, max: 64 }),
+  body('password').isString().isLength({ min: 1, max: 200 }),
+  validate,
+], async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'invalid_credentials' });
   try {
@@ -51,7 +57,11 @@ router.get('/me', async (req, res) => {
   }
 });
 
-router.post('/telegram/webapp', async (req, res) => {
+router.post('/telegram/webapp', [
+  body('initData').isString().isLength({ min: 10 }),
+  body('invite').optional().isString().isLength({ min: 1, max: 128 }),
+  validate,
+], async (req, res) => {
   const { initData, invite } = req.body || {};
   if (!process.env.DATABASE_URL) return res.status(501).json({ error: 'not_supported' });
   if (!initData) return res.status(400).json({ error: 'invalid_payload' });
@@ -93,7 +103,13 @@ router.post('/telegram/webapp', async (req, res) => {
   }
 });
 
-router.post('/register', async (req, res) => {
+router.post('/register', [
+  body('username').isString().trim().isLength({ min: 3, max: 64 }),
+  body('email').optional().isEmail().isLength({ max: 120 }),
+  body('password').isString().isLength({ min: 6, max: 200 }),
+  body('invite').isString().isLength({ min: 1, max: 128 }),
+  validate,
+], async (req, res) => {
   const { username, email, password, invite } = req.body || {};
   if (!username || !password || !invite) return res.status(400).json({ error: 'invalid_payload' });
   if (!process.env.DATABASE_URL) return res.status(501).json({ error: 'not_supported' });

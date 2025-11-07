@@ -13,6 +13,8 @@ const adminRoutes = require('./api/routes/admin');
 const resellerRoutes = require('./api/routes/reseller');
 const meRoutes = require('./api/routes/me');
 const telegramRoutes = require('./api/routes/telegram');
+const { requireAuth } = require('./api/middleware/auth');
+const { prisma } = require('./api/db/client');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,8 +82,19 @@ app.use(
 
 // Downloads (loader binaries)
 const downloadsDir = path.join(__dirname, 'downloads');
+async function ensureTelegramLinked(req, res, next) {
+  try {
+    const u = await prisma.user.findUnique({ where: { id: req.user.sub } });
+    if (!u || !u.telegramId) return res.status(403).send('telegram_required');
+    return next();
+  } catch (e) {
+    return res.status(500).send('server_error');
+  }
+}
 app.use(
   '/downloads',
+  requireAuth,
+  ensureTelegramLinked,
   express.static(downloadsDir, {
     etag: true,
     lastModified: true,
