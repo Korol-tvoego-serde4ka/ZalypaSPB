@@ -401,11 +401,18 @@
           <td>${sanitizeInput(user.email)}</td>
           <td>${sanitizeInput(user.status)}</td>
           <td>
-            <button class="btn-action btn-edit" onclick="showNotification('Редактирование позже', 'info')">Редактировать</button>
-            <button class="btn-action btn-delete" onclick="showNotification('Удаление позже', 'info')">Удалить</button>
+            <button class="btn-action btn-edit" data-act="res-user-edit" data-id="${user.id}">Редактировать</button>
+            <button class="btn-action btn-delete" data-act="res-user-del" data-id="${user.id}">Удалить</button>
           </td>
         `;
         tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-act]')?.forEach(btn => {
+        btn.addEventListener('click', (ev)=>{
+          const act = ev.currentTarget.getAttribute('data-act');
+          if (act === 'res-user-edit') showNotification('Редактирование позже', 'info');
+          if (act === 'res-user-del') showNotification('Удаление позже', 'info');
+        });
       });
     } catch(_) {}
   };
@@ -426,11 +433,18 @@
           <td>${sanitizeInput(product.type || '')}</td>
           <td>₽${price}</td>
           <td>
-            <button class="btn-action btn-edit" onclick="showNotification('Редактирование позже', 'info')">Редактировать</button>
-            <button class="btn-action btn-delete" onclick="showNotification('Удаление позже', 'info')">Удалить</button>
+            <button class="btn-action btn-edit" data-act="res-prod-edit" data-id="${product.id}">Редактировать</button>
+            <button class="btn-action btn-delete" data-act="res-prod-del" data-id="${product.id}">Удалить</button>
           </td>
         `;
         tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-act]')?.forEach(btn => {
+        btn.addEventListener('click', (ev)=>{
+          const act = ev.currentTarget.getAttribute('data-act');
+          if (act === 'res-prod-edit') showNotification('Редактирование позже', 'info');
+          if (act === 'res-prod-del') showNotification('Удаление позже', 'info');
+        });
       });
     } catch(_) {}
   };
@@ -460,10 +474,13 @@
           <td>${sanitizeInput(user.email)}</td>
           <td><span style="color: ${user.status === 'Активен' ? '#4CAF50' : '#f44336'}">${sanitizeInput(user.status)}</span></td>
           <td>
-            <button class="btn-action btn-edit" onclick="showNotification('Редактирование позже', 'info')">Просмотр</button>
+            <button class="btn-action btn-edit" data-act="adm-user-view" data-id="${user.id}">Просмотр</button>
           </td>
         `;
         tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-act]')?.forEach(btn => {
+        btn.addEventListener('click', ()=> showNotification('Просмотр позже', 'info'));
       });
     } catch(_){}
   };

@@ -71,15 +71,15 @@
                 <div class="user-info">
                     <span class="user-badge">User</span>
                     <span id="userUsername"></span>
-                    <button class="btn-logout" onclick="logout()">Выход</button>
+                    <button class="btn-logout">Выход</button>
                 </div>
             </div>
 
             <div class="navigation">
-                <button class="nav-btn active" onclick="showSection(this, 'userLoader')">Loader</button>
-                <button class="nav-btn" onclick="showSection(this, 'userProducts')">Продукты</button>
-                <button class="nav-btn" onclick="showSection(this, 'userStatistics')">Статистика</button>
-                <button class="nav-btn" onclick="showSection(this, 'userTelegram')">Telegram</button>
+                <button class="nav-btn active" data-section="userLoader">Loader</button>
+                <button class="nav-btn" data-section="userProducts">Продукты</button>
+                <button class="nav-btn" data-section="userStatistics">Статистика</button>
+                <button class="nav-btn" data-section="userTelegram">Telegram</button>
             </div>
 
             <div id="userLoader" class="content-section active">
@@ -139,15 +139,15 @@
                 <div class="user-info">
                     <span class="user-badge" style="background: rgba(255, 152, 0, 0.2); color: #FF9800;">Reseller</span>
                     <span id="resellerUsername"></span>
-                    <button class="btn-logout" onclick="logout()">Выход</button>
+                    <button class="btn-logout">Выход</button>
                 </div>
             </div>
 
             <div class="navigation">
-                <button class="nav-btn active" onclick="showSection(this, 'resellerUsers')">Пользователи</button>
-                <button class="nav-btn" onclick="showSection(this, 'resellerProducts')">Продукты</button>
-                <button class="nav-btn" onclick="showSection(this, 'resellerStatistics')">Статистика</button>
-                <button class="nav-btn" onclick="showSection(this, 'resellerTelegram')">Telegram</button>
+                <button class="nav-btn active" data-section="resellerUsers">Пользователи</button>
+                <button class="nav-btn" data-section="resellerProducts">Продукты</button>
+                <button class="nav-btn" data-section="resellerStatistics">Статистика</button>
+                <button class="nav-btn" data-section="resellerTelegram">Telegram</button>
             </div>
 
             <div id="resellerUsers" class="content-section active">
@@ -231,16 +231,16 @@
                 <div class="user-info">
                     <span class="user-badge" style="background: rgba(33, 150, 243, 0.2); color: #2196F3;">Admin</span>
                     <span id="adminUsername"></span>
-                    <button class="btn-logout" onclick="logout()">Выход</button>
+                    <button class="btn-logout">Выход</button>
                 </div>
             </div>
 
             <div class="navigation">
-                <button class="nav-btn active" onclick="showSection(this, 'adminUsers')">Все пользователи</button>
-                <button class="nav-btn" onclick="showSection(this, 'adminResellers')">Реселлеры</button>
-                <button class="nav-btn" onclick="showSection(this, 'adminLogs')">Логи аудита</button>
-                <button class="nav-btn" onclick="showSection(this, 'adminSettings')">Настройки</button>
-                <button class="nav-btn" onclick="showSection(this, 'adminTelegram')">Telegram</button>
+                <button class="nav-btn active" data-section="adminUsers">Все пользователи</button>
+                <button class="nav-btn" data-section="adminResellers">Реселлеры</button>
+                <button class="nav-btn" data-section="adminLogs">Логи аудита</button>
+                <button class="nav-btn" data-section="adminSettings">Настройки</button>
+                <button class="nav-btn" data-section="adminTelegram">Telegram</button>
             </div>
 
             <div id="adminUsers" class="content-section active">
@@ -359,7 +359,7 @@
                         <div class="form-group">
                             <label><input type="checkbox" id="adminBroadcastIncludeGroup"> Также отправить в группу</label>
                         </div>
-                        <button class="btn" onclick="sendAdminBroadcast()">Отправить</button>
+                        <button id="btnAdminBroadcast" class="btn">Отправить</button>
                         <div id="adminBroadcastResult" style="margin-top:8px;"></div>
                     </div>
                     <div class="table-header" style="margin-top:24px;">
