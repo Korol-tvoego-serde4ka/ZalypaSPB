@@ -129,6 +129,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('loginForm');
     if (!form) return;
+    const btnShowRegister = document.getElementById('btnShowRegister');
+    if (btnShowRegister) btnShowRegister.addEventListener('click', ()=> window.showRegister());
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -150,6 +152,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('registerForm');
     if (!form) return;
+    const btnShowLogin = document.getElementById('btnShowLogin');
+    if (btnShowLogin) btnShowLogin.addEventListener('click', ()=> window.showLogin());
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       e.stopImmediatePropagation();
